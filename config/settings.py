@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from datetime import timedelta
 from pathlib import Path
-from decouple import config, csv
+from decouple import config, Csv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,7 +26,7 @@ SECRET_KEY = config ('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default=[], cast=csv)
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default=[], cast=Csv)
 
 AUTH_USER_MODEL = 'users.User'
 
@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'drf_spectacular',
     'users',
+    'seeders',
 ]
 
 REST_FRAMEWORK = {
@@ -69,10 +70,10 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'TAGS': [
-        {'name': 'Auth', 'description': 'Authentication and Authorization endpoints'},
-        {'name': 'Users', 'description': 'User management'},
-        {'name': 'Roles', 'description': 'Role management'},
-        {'name': 'Permissions', 'description': 'Permission management'},
+        {'name': 'Auth', 'description': 'Endpoints de Autenticación y Autorización'},
+        {'name': 'Users', 'description': 'Gestión de Usuarios'},
+        {'name': 'Roles', 'description': 'Gestión de Roles'},
+        {'name': 'Permissions', 'description': 'Gestión de Permisos'},
     ],
 }
 
@@ -92,7 +93,10 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware', 
+
 ]
+
 
 ROOT_URLCONF = 'config.urls'
 
@@ -103,6 +107,7 @@ TEMPLATES = [
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
+                'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
@@ -125,9 +130,9 @@ DATABASES = {
         'PASSWORD': config('DB_PASSWORD', default=''),
         'HOST': config('DB_HOST', default=''),
         'PORT': config('DB_PORT', default=''),
-        'OPTIONS': {
-            'sslmode': 'require',
-        }
+        #'OPTIONS': {
+        #    'sslmode': 'require',
+        #}
     }
 }
 
@@ -157,11 +162,8 @@ AUTH_PASSWORD_VALIDATORS = [
 CORS_ALLOW_ALL_ORIGINS = True
 
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
 
