@@ -1,171 +1,183 @@
-# Guía de Desarrollo de Funcionalidades
+Guía de Desarrollo - Smart Sales 365
 
 Esta guía detalla el flujo completo para desarrollar nuevas funcionalidades en el backend de Django, basándose en el patrón implementado en el módulo de usuarios.
 
-## 📋 Índice
+📋 Índice
 
-- [1. Arquitectura del Proyecto](#1-arquitectura-del-proyecto)
-- [2. Creación de Nuevos Módulos vs Apps](#2-creación-de-nuevos-módulos-vs-apps)
-- [3. Estructura de Archivos por Módulo](#3-estructura-de-archivos-por-módulo)
-- [4. Flujo de Desarrollo](#4-flujo-de-desarrollo)
-- [5. Modelos y BaseModel](#5-modelos-y-basemodel)
-- [6. Enums Centralizados](#6-enums-centralizados)
-- [7. Serializers](#7-serializers)
-- [8. Views y ViewSets](#8-views-y-viewsets)
-- [9. Sistema de Permisos](#9-sistema-de-permisos)
-- [10. Utilities (Utils)](#10-utilities-utils)
-- [11. Sistema de Respuestas](#11-sistema-de-respuestas)
-- [12. Configuración de URLs](#12-configuración-de-urls)
-- [13. Documentación Swagger](#13-documentación-swagger)
-- [14. Seeders](#14-seeders)
-- [15. Checklist de Desarrollo](#15-checklist-de-desarrollo)
+1. Arquitectura del Proyecto
 
----
+2. Creación de Nuevos Módulos vs Apps
 
-## 1. Arquitectura del Proyecto
+3. Estructura de Archivos por Módulo
+
+4. Flujo de Desarrollo
+
+5. Modelos y BaseModel
+
+6. Enums Centralizados
+
+7. Serializers
+
+8. Views y ViewSets
+
+9. Sistema de Permisos
+
+10. Utilities (Utils)
+
+11. Sistema de Respuestas
+
+12. Configuración de URLs
+
+13. Documentación Swagger
+
+14. Seeders
+
+15. Checklist de Desarrollo
+
+16. Arquitectura del Proyecto (Patrón Service Layer)
 
 El proyecto sigue una arquitectura modular de Django con patrones estandarizados:
 
-```
 smart_sales/
-├── config/                 # Configuración central y utilidades globales
-│   ├── models.py          # BaseModel para herencia
-│   ├── enums.py          # Enums centralizados
-│   ├── response.py       # Sistema de respuestas estandarizado
-│   ├── urls.py           # URLs principales
-│   └── settings.py       # Configuración Django
-├── user/                 # Módulo de usuarios
-├── branch/               # Gestión de Sucursales y Estructura
-├── product/              # Catálogo, Tallas, SKU, Stock
-├── sales/                # Venta, Carrito, Historial, Descuentos
-├── logistic/             # Agencias de Reparto, Envíos
-├── ia/                   # Lógica de Machine Learning
-├── report/               # Reportes Dinámicos
-├── seeders/              # Sistema de seeders
-└── [nuevo_modulo]/       # Nuevos módulos siguiendo el mismo patrón
+├── config/ # Configuración central y utilidades globales
+│ ├── models.py # BaseModel (con UUID)
+│ ├── enums.py # Enums centralizados
+│ ├── response.py # Funciones de respuesta estandarizadas
+│ ├── permissions.py # Clase HasPermission
+│ ├── urls.py # URLs principales
+│ └── settings.py # Configuración Django
+├── users/ # Módulo de usuarios
+│ ├── constants/
+│ │ └── permissions.py # Enum de Permisos
+│ ├── models.py # Modelos User, Role, Permission
+│ ├── serializers.py # Serializers
+│ ├── services.py # Capa de Servicios (Lógica de Negocio)
+│ └── views.py # Vistas (Capa de Control)
+└── [nuevo_modulo]/ # Nuevos módulos
 
-```
+Flujo de la Arquitectura (Patrón de Respuesta Directa desde el Servicio):
 
-## 2. Creación de Nuevos Módulos vs Apps
+Views (views.py): Actúa como Controlador Delgado. Recibe el request, valida la entrada (usando un Serializer), y llama a un método del Service. Retorna directamente la respuesta generada por el servicio.
 
-### ¿Cuándo crear una nueva App?
+Services (services.py): Contiene la Lógica de Negocio y el Manejo de Respuestas. Es llamado por la Vista. Interactúa con los Models, maneja errores (try...except) y construye la respuesta HTTP final usando config/response.py (ej. SuccessResponse, NotFoundResponse).
 
-**Crear una nueva App cuando:**
+Models (models.py): Define la base de datos.
 
-- La funcionalidad es completamente independiente
-- Requiere sus propios modelos de datos
-- Podría reutilizarse en otros proyectos
-- Tiene lógica de negocio compleja y específica
+2. Creación de Nuevos Módulos vs Apps
 
-**Trabajar en módulos existentes cuando:**
+¿Cuándo crear una nueva App?
 
-- La funcionalidad extiende algo ya existente
-- Solo necesitas nuevas vistas o endpoints
-- Los modelos ya existen y solo necesitas nuevas relaciones
+Crear una nueva App cuando:
 
-### Comando para crear nueva App:
+La funcionalidad es completamente independiente
 
-```bash
+Requiere sus propios modelos de datos
+
+Podría reutilizarse en otros proyectos
+
+Tiene lógica de negocio compleja y específica
+
+Trabajar en módulos existentes cuando:
+
+La funcionalidad extiende algo ya existente
+
+Solo necesitas nuevas vistas o endpoints
+
+Los modelos ya existen y solo necesitas nuevas relaciones
+
+Comando para crear nueva App:
+
 python manage.py startapp nombre_del_modulo
-```
 
----
+3. Estructura de Archivos por Módulo
 
-## 3. Estructura de Archivos por Módulo
+Cada módulo debe seguir esta estructura estándar (ej. users):
 
-Cada módulo debe seguir esta estructura estándar:
-
-```
 nuevo_modulo/
-├── __init__.py
-├── apps.py              # Configuración de la app
-├── models.py            # Modelos de datos
-├── serializers.py       # Serializers para API
-├── views.py             # Views y ViewSets
-├── permissions.py       # Permisos específicos del módulo
-├── utils.py            # Utilidades específicas del módulo
-├── migrations/         # Migraciones de BD
-│   └── __init__.py
-└── __pycache__/        # Cache de Python (auto-generado)
-```
+├── **init**.py
+├── apps.py # Configuración de la app
+├── models.py # Modelos de datos (User, Role, Permission)
+├── serializers.py # Serializers (UserSerializer, RoleSerializer)
+├── services.py # Lógica de negocio (UserService, RoleService)
+├── views.py # Vistas (UserViewSet, RoleViewSet, LoginView)
+├── constants/
+│ └── permissions.py # Enums de permisos (Permissions.USER_SHOW)
+├── migrations/
+└── **pycache**/
 
----
-
-## 4. Flujo de Desarrollo
+4. Flujo de Desarrollo
 
 Para cada nueva funcionalidad, sigue este orden:
 
-1. **Definir el Modelo** (`models.py`)
-2. **Crear/Actualizar Enums** (`config/enums.py`)
-3. **Crear Serializers** (`serializers.py`)
-4. **Implementar Views** (`views.py`)
-5. **Configurar Permisos** (`permissions.py`)
-6. **Agregar Utils si necesario** (`utils.py`)
-7. **Configurar URLs** (`config/urls.py`)
-8. **Documentar con Swagger** (decoradores en views)
-9. **Crear Seeder** (`seeders/`)
-10. **Hacer migraciones** y **probar**
+Definir Constantes (constants/permissions.py) si se necesitan nuevos permisos.
 
----
+Definir el Modelo (models.py)
 
-## 5. Modelos y BaseModel
+Crear/Actualizar Enums (config/enums.py)
 
-### BaseModel
+Crear Serializers (serializers.py)
 
-Todos los modelos deben heredar de `BaseModel`:
+Implementar Lógica de Negocio y Respuestas (services.py).
 
-```python
+Implementar Vistas (views.py) - (Debe llamar al servicio y retornar su respuesta).
+
+Configurar Permisos (en el ViewSet usando permission_classes y get_permissions).
+
+Configurar URLs (config/urls.py)
+
+Documentar con Swagger (decoradores en views)
+
+Hacer migraciones y probar
+
+5. Modelos y BaseModel
+
+BaseModel
+
+Todos los modelos deben heredar de BaseModel:
+
 # En tu models.py
+
 from config.models import BaseModel
 from django.db import models
 
-class TuModelo(BaseModel):
-    # BaseModel ya incluye:
-    # - id (UUID)
-    # - created_at (DateTime)
-    # - updated_at (DateTime)
+class TuModelo(BaseModel): # BaseModel ya incluye: # - id (UUID) # - created_at (DateTime) # - updated_at (DateTime)
 
     nombre = models.CharField(max_length=100)
     # ... otros campos
-```
 
-### Ejemplo del modelo User:
+Ejemplo del modelo User:
 
-```python
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from config.models import BaseModel
-from config.enums import UserRole
+from config.enums import Gender
+from .models import Role # Asumiendo import local
 from django.db import models
 
 class User(BaseModel, AbstractBaseUser, PermissionsMixin):
-    ci = models.CharField(max_length=20, unique=True)
-    name = models.CharField(max_length=100)
-    phone = models.CharField(max_length=20)
-    email = models.EmailField(unique=True)
-    role = models.CharField(max_length=20, choices=UserRole.choices())
-    is_active = models.BooleanField(default=True)
+ci = models.CharField(max_length=20, unique=True)
+name = models.CharField(max_length=100)
+phone = models.CharField(max_length=20)
+email = models.EmailField(unique=True)
+role = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True, related_name="users")
+is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return f"{self.name} ({self.role})"
-```
 
----
+6. Enums Centralizados
 
-## 6. Enums Centralizados
-
-### Ubicación: `config/enums.py`
+Ubicación: config/enums.py
 
 Los enums se definen centralizadamente para mantener consistencia:
 
-```python
 from enum import Enum
 
 class TuEnum(Enum):
-    """
-    Descripción del enum
-    """
-    OPCION_1 = 'opcion1'
-    OPCION_2 = 'opcion2'
+"""
+Descripción del enum
+"""
+OPCION_1 = 'opcion1'
+OPCION_2 = 'opcion2'
 
     @classmethod
     def choices(cls):
@@ -184,51 +196,43 @@ class TuEnum(Enum):
             self.OPCION_2: 'Opción Dos',
         }
         return labels.get(self, self.value)
-```
 
-### Ejemplo del UserRole enum:
+Ejemplo del Gender enum:
 
-```python
-class UserRole(Enum):
-    ADMINISTRATOR = 'administrator'
-    EMPLOYEE = 'employee'
-    CLIENT = 'client'
-    DELIVERY = 'delivery'
+class Gender(Enum):
+MALE = 'male'
+FEMALE = 'female'
+OTHER = 'other'
 
     @classmethod
     def choices(cls):
-        return [(role.value, role.get_label()) for role in cls]
+        return [(gender.value, gender.get_label()) for gender in cls]
 
     def get_label(self):
         labels = {
-            self.ADMINISTRATOR: 'Administrador',
-            self.EMPLOYEE: 'Empleado',
-            self.CLIENT: 'Cliente',
-            self.DELIVERY: 'Delivery',
+            self.MALE: 'Masculino',
+            self.FEMALE: 'Femenino',
+            self.OTHER: 'Otro',
         }
         return labels.get(self, self.value)
-```
 
----
+7. Serializers
 
-## 7. Serializers
-
-### Ubicación: `[modulo]/serializers.py`
+Ubicación: [modulo]/serializers.py
 
 Los serializers manejan la serialización/deserialización de datos:
 
-```python
 from rest_framework import serializers
 from .models import TuModelo
 
 class TuModeloSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TuModelo
-        fields = ['id', 'campo1', 'campo2', 'created_at', 'updated_at']
-        extra_kwargs = {
-            'campo_sensible': {'write_only': True},
-        }
-        read_only_fields = ['id', 'created_at', 'updated_at']
+class Meta:
+model = TuModelo
+fields = ['id', 'campo1', 'campo2', 'created_at', 'updated_at']
+extra_kwargs = {
+'campo_sensible': {'write_only': True},
+}
+read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate_campo1(self, value):
         """Validación específica"""
@@ -239,340 +243,275 @@ class TuModeloSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Lógica personalizada de creación"""
         return TuModelo.objects.create(**validated_data)
-```
 
-### Ejemplo del UserSerializer:
+Ejemplo del UserSerializer:
 
-```python
 class UserSerializer(serializers.ModelSerializer):
+role = RoleListSerializer(read_only=True)
+role_id = serializers.PrimaryKeyRelatedField(
+write_only=True, queryset=Role.objects.all(), source='role', allow_null=True
+)
+
     class Meta:
         model = User
-        fields = ['id', 'ci', 'name', 'phone', 'email', 'password', 'role']
+        fields = [
+            'id', 'ci', 'name', 'lastname', 'email', 'phone', 'gender',
+            'is_active', 'role', 'role_id', 'password'
+        ]
         extra_kwargs = {
-            'password': {'write_only': True},
+            'password': {'write_only': True, 'required': False},
         }
-        read_only_fields = ['id', 'created_at', 'updated_at']
 
     def validate_ci(self, value):
         if not value.isdigit():
             raise serializers.ValidationError("El CI debe contener solo números.")
         return value
-```
 
----
+8. Views y ViewSets
 
-## 8. Views y ViewSets
-
-### Ubicación: `[modulo]/views.py`
+Ubicación: [modulo]/views.py
 
 Usa ViewSets para operaciones CRUD estándar y APIView para lógica específica:
 
-```python
 from rest_framework import viewsets
 from rest_framework.views import APIView
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.permissions import IsAuthenticated
 from drf_spectacular.utils import extend_schema
-from config.response import response
+from config.response import SuccessResponse, ErrorResponse # Importar respuestas
+from .services import TuModeloService # Importar servicio
+from .serializers import TuModeloSerializer
 
-class TuModeloViewSet(viewsets.ModelViewSet):
-    serializer_class = TuModeloSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [require_roles([UserRole.ADMINISTRATOR])]
+class TuModeloViewSet(viewsets.ViewSet):
+serializer_class = TuModeloSerializer
+permission_classes = [IsAuthenticated] # Añadir permisos personalizados
 
     def create(self, request):
         serializer = TuModeloSerializer(data=request.data)
-        if serializer.is_valid():
-            instance = serializer.save()
-            return response(
-                201,
-                "Creado correctamente",
-                data=TuModeloSerializer(instance).data
-            )
-        return response(400, "Errores de validación", error=serializer.errors)
+        serializer.is_valid(raise_exception=True)
+
+        # Llamar al servicio y retornar su respuesta
+        service_response = TuModeloService.create(serializer.validated_data)
+        return service_response
 
     def list(self, request):
         # Implementar filtros, paginación, búsqueda
-        queryset = TuModelo.objects.all()
-
-        # Filtros
-        attr = request.query_params.get('attr')
-        value = request.query_params.get('value')
-        if attr and value:
-            # Lógica de filtrado
-            pass
-
-        # Paginación
+        filters = {} # ...
+        order = request.query_params.get('order')
         limit = request.query_params.get('limit')
         offset = request.query_params.get('offset', 0)
 
-        serializer = TuModeloSerializer(queryset, many=True)
-        return response(200, "Encontrados", data=serializer.data)
-```
+        # Llamar al servicio y retornar su respuesta
+        service_response = TuModeloService.list(
+            filters=filters, order=order, limit=limit, offset=offset
+        )
+        return service_response
 
-### Ejemplo específico - LoginAdminView:
+Ejemplo específico - LoginView:
 
-```python
 @extend_schema(
-    tags=['Autenticación'],
-    request=LoginSerializer,
-    responses={
-        200: StandardResponseSerializerSuccess,
-        401: StandardResponseSerializerError,
-    }
+tags=['Auth'],
+request=LoginSerializer,
+responses={
+200: TokenResponseSerializer,
+401: ErrorResponse,
+}
 )
-class LoginAdminView(APIView):
+class LoginView(APIView):
+permission_classes = [AllowAny]
+
     def post(self, request):
-        email = request.data.get("email")
-        password = request.data.get("password")
-        user = authenticate(email=email, password=password)
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        if not user:
-            return response(401, "Email o contraseña incorrectos")
+        service_response = AuthService.login(
+            email=serializer.validated_data['email'],
+            password=serializer.validated_data['password']
+        )
+        return service_response
 
-        if user.role not in [UserRole.ADMINISTRATOR.value]:
-            return response(403, "Rol no autorizado")
+9. Sistema de Permisos
 
-        token = RefreshToken.for_user(user)
-        return response(200, "Login exitoso", data={
-            "accessToken": str(token.access_token),
-            "refresh": str(token),
-            "User": UserSerializer(user).data
-        })
-```
+El sistema de permisos es personalizado y se basa en tres archivos principales:
 
----
+users/constants/permissions.py: Define los nombres de los permisos como un Enum (ej. Permissions.USER_SHOW).
 
-## 9. Sistema de Permisos
+users/models.py:
 
-### Ubicación: `[modulo]/permissions.py`
+Permission: Almacena los permisos en la BD (ej. un registro con name="Mostrar usuarios").
 
-Sistema de permisos basado en roles usando el enum:
+Role: Tiene una relación ManyToManyField con Permission.
 
-```python
-from rest_framework.permissions import BasePermission
-from config.enums import UserRole
+User: Tiene una ForeignKey a Role (un usuario tiene un solo rol).
 
-def require_roles(allowed_roles):
-    """
-    Función para validar permisos basados en roles.
+config/permissions.py: Contiene la clase HasPermission.
 
-    Args:
-        allowed_roles: Lista de UserRole enums o strings
+Uso en Vistas (views.py)
 
-    Usage:
-        permission_classes = [require_roles([UserRole.ADMINISTRATOR])]
-    """
-    role_values = []
-    for role in allowed_roles:
-        if isinstance(role, UserRole):
-            role_values.append(role.value)
-        else:
-            role_values.append(role)
+Para proteger un ViewSet, debes:
 
-    class RolePermission(BasePermission):
-        def has_permission(self, request, view):
-            return (
-                request.user.is_authenticated and
-                request.user.role in role_values
-            )
+Incluir HasPermission en permission_classes.
 
-    return RolePermission
-```
+Implementar el método get_permissions(self) para asignar dinámicamente el permiso requerido desde el Enum de constantes.
 
-### Uso en Views:
+# En tu views.py
 
-```python
-# Solo administradores
-permission_classes = [require_roles([UserRole.ADMINISTRATOR])]
+from rest_framework.permissions import IsAuthenticated
+from config.permissions import HasPermission
+from .constants.permissions import Permissions
 
-# Múltiples roles
-permission_classes = [require_roles([
-    UserRole.ADMINISTRATOR,
-    UserRole.EMPLOYY,
-    UserRole.CLIENT
-])]
-```
+@extend_schema(tags=['Users'])
+class UserViewSet(viewsets.ViewSet):
 
----
+    permission_classes = [IsAuthenticated, HasPermission]
 
-## 10. Utilities (Utils)
+    def get_permissions(self):
+        """ Asigna el 'permission_required' a la vista dinámicamente. """
+        permission_required = None
 
-### Ubicación: `[modulo]/utils.py`
+        if self.action == 'list' or self.action == 'retrieve':
+            permission_required = Permissions.USER_SHOW.value
+        elif self.action == 'create':
+            permission_required = Permissions.USER_CREATE.value
+        elif self.action in ['update', 'partial_update']:
+            permission_required = Permissions.USER_UPDATE.value
+        elif self.action == 'destroy':
+            permission_required = Permissions.USER_DELETE.value
 
-Funciones auxiliares específicas del módulo:
+        # Esto asigna la variable que 'HasPermission' leerá
+        self.permission_required = permission_required
+        return super().get_permissions()
 
-```python
-# Ejemplo de utils para usuarios
-from itsdangerous import URLSafeTimedSerializer
-from django.conf import settings
-import requests
+    # ... tus métodos list, create, retrieve ...
 
-def generate_token(email):
-    """Genera token de verificación"""
-    s = URLSafeTimedSerializer(settings.SECRET_KEY)
-    return s.dumps(email, salt='email-confirm')
+10. Utilities (Utils)
 
-def verify_token(token, max_age=3600):
-    """Verifica token de verificación"""
-    s = URLSafeTimedSerializer(settings.SECRET_KEY)
-    try:
-        return s.loads(token, salt='email-confirm', max_age=max_age)
-    except Exception:
-        return None
+... (Sección sin cambios) ...
 
-def send_verification_email(user):
-    """Envía email de verificación"""
-    token = generate_token(user.email)
-    # Lógica de envío de email
-    pass
-```
+11. Sistema de Respuestas
 
----
+Ubicación: config/response.py
 
-## 11. Sistema de Respuestas
+Este archivo provee funciones estandarizadas para las respuestas HTTP (ej. SuccessResponse, ErrorResponse, NotFoundResponse).
 
-### Ubicación: `config/response.py`
+Importante: Patrón de Arquitectura (Respuesta Directa del Servicio)
 
-Sistema estandarizado de respuestas para toda la API:
+CAPA DE SERVICIO (services.py): DEBE importar y usar config/response.py. Es responsable de manejar su propia lógica (incluyendo try...except si es necesario) y construir la respuesta HTTP final (ej. SuccessResponse, NotFoundResponse).
 
-```python
-def response(
-    status_code: int,
-    message: str | list,
-    data: any = None,
-    error: str = None,
-    count_data: int = None
-) -> Response:
-    response = {
-        "statusCode": status_code,
-        "message": message
-    }
+CAPA DE VISTA (views.py): DEBE llamar al servicio y retornar directamente la respuesta que este genera. Esta capa solo valida los datos de entrada (serializers) y pasa el control al servicio.
 
-    if error is not None:
-        response["error"] = error
-    if data is not None:
-        response["data"] = data
-    if count_data is not None:
-        response["countData"] = count_data
+Ejemplo de Implementación (Patrón Actual):
 
-    return Response(response, status=status_code)
-```
+# En services.py
 
-### Uso en Views:
+from config.response import SuccessResponse, NotFoundResponse
+from .models import User
+from .serializers import UserSerializer
 
-```python
-# Éxito con datos
-return response(200, "Operación exitosa", data=serializer.data)
+class UserService:
+@staticmethod
+def retrieve(user_id):
+try:
+user = User.objects.get(id=user_id, is_active=True)
+user_data = UserSerializer(user).data # 1. El servicio crea la respuesta de éxito
+return SuccessResponse(message="Usuario encontrado.", data=user_data)
+except User.DoesNotExist: # 2. El servicio crea la respuesta de error
+return NotFoundResponse("Usuario no encontrado.")
 
-# Error con detalle
-return response(400, "Error de validación", error=serializer.errors)
+# En views.py
 
-# Lista con conteo
-return response(200, "Encontrados", data=lista, count_data=len(lista))
-```
+class UserViewSet(viewsets.ViewSet): # ...
+def retrieve(self, request, pk=None): # 3. La vista solo llama y retorna
+service_response = UserService.retrieve(user_id=pk)
+return service_response
 
----
+12. Configuración de URLs
 
-## 12. Configuración de URLs
+Ubicación Principal: config/urls.py
 
-### Ubicación Principal: `config/urls.py`
+Todas las URLs de la API se registran aquí.
 
-Todas las URLs se configuran centralizadamente:
-
-```python
+from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from tu_modulo.views import TuModeloViewSet, TuAPIView
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from users.views import UserViewSet, RoleViewSet, PermissionViewSet, LoginView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 # Router para ViewSets
+
 router = DefaultRouter()
-router.register(r'tu-modelo', TuModeloViewSet, basename='TuModelo')
+router.register(r'users', UserViewSet, basename='user')
+router.register(r'roles', RoleViewSet, basename='role')
+router.register(r'permissions', PermissionViewSet, basename='permission')
 
 urlpatterns = [
-    # APIs específicas
-    path('api/tu-endpoint/', TuAPIView.as_view(), name='tu_endpoint'),
+path('admin/', admin.site.urls),
 
-    # Router URLs
+    # URLs de la API (registradas en el router)
     path('api/', include(router.urls)),
 
-    # Documentación
-    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    # Endpoints de Autenticación
+    path('api/auth/login/', LoginView.as_view(), name='token_obtain_pair'),
+    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+    # Documentación Swagger
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularAPIView.as_view(url_name='schema'), name='swagger-ui'),
+
 ]
-```
 
-### URLs del ejemplo User:
+13. Documentación Swagger
 
-```python
-# Registro en router
-router.register(r'users', UserViewSet, basename='User')
-router.register(r'residents', ResidentViewSet, basename='Resident')
+Decorador @extend_schema
 
-# APIs específicas
-path('api/auth/login-admin/', LoginAdminView.as_view(), name='login_admin'),
-path('api/auth/verify-email/', VerifyEmailView.as_view(), name='verify_email'),
-```
+Documenta cada endpoint usando drf-spectacular:
 
----
-
-## 13. Documentación Swagger
-
-### Decorador @extend_schema
-
-Documenta cada endpoint usando `drf-spectacular`:
-
-```python
 from drf_spectacular.utils import extend_schema, OpenApiParameter
+from config.response import SuccessResponse, ErrorResponse # (O tus Serializers de respuesta)
 
 @extend_schema(
-    tags=['Nombre del Tag'],
-    request=TuSerializer,
-    parameters=[
-        OpenApiParameter(name='param', description='Descripción', required=False, type=str),
-    ],
-    responses={
-        200: StandardResponseSerializerSuccess,
-        400: StandardResponseSerializerError,
-        404: StandardResponseSerializerError,
-    }
+tags=['Nombre del Tag'],
+request=TuSerializer,
+parameters=[
+OpenApiParameter(name='param', description='Descripción', required=False, type=str),
+],
+responses={
+200: SuccessResponse, # Usar las clases de respuesta
+400: ErrorResponse,
+404: ErrorResponse,
+}
 )
 class TuView(APIView):
-    def post(self, request):
-        # Tu lógica aquí
-        pass
-```
+def post(self, request): # Tu lógica aquí
+pass
 
-### Serializers para Swagger:
+Serializers para Swagger:
 
-Usa los serializers estándar definidos en `config/response.py`:
+Puedes usar directamente las funciones de config/response.py en el decorador responses si no has definido serializers de respuesta específicos (como StandardResponseSerializerSuccess que tenías comentado).
 
-```python
 responses={
-    200: StandardResponseSerializerSuccess,
-    400: StandardResponseSerializerError,
-    500: StandardResponseSerializerError,
+200: SuccessResponse,
+400: ErrorResponse,
+500: ErrorResponse,
 }
-```
 
----
+14. Seeders
 
-## 14. Seeders
-
-### Estructura de Seeders
+Estructura de Seeders
 
 Para cada nueva entidad, crea su seeder correspondiente:
 
-#### 1. Crear el Seeder: `seeders/tu_entidad_seeder.py`
+1. Crear el Seeder: seeders/tu_entidad_seeder.py
 
-```python
 import pandas as pd
 import random
 from tu_modulo.models import TuModelo
 from config.enums import TuEnum
 
 class TuEntidadSeeder:
-    def __init__(self):
-        self.cantidad = 10
-        self.messages = []
+def **init**(self):
+self.cantidad = 10
+self.messages = []
 
     def add_message(self, message):
         self.messages.append(message)
@@ -609,181 +548,169 @@ class TuEntidadSeeder:
             'items_created': len(items),
             'total_items': TuModelo.objects.count()
         }
-```
 
-#### 2. Agregar a Views: `seeders/views.py`
+2. Agregar a Views: seeders/views.py (Si tienes este archivo)
 
-```python
-from .tu_entidad_seeder import TuEntidadSeeder
+# from .tu_entidad_seeder import TuEntidadSeeder
 
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def seed_database(request):
-    """Ejecutar todos los seeders"""
-    try:
-        # Seeders existentes
-        user_seeder = UserSeeder()
-        user_results = user_seeder.run()
+# (Esta sección parece estar incompleta en la guía original,
 
-        # Tu nuevo seeder
-        tu_seeder = TuEntidadSeeder()
-        tu_results = tu_seeder.run()
+# la lógica para ejecutar seeders debe ser implementada)
 
-        response_data = {
-            'users': user_results,
-            'tu_entidad': tu_results
-        }
+# @api_view(['GET'])
 
-        return response(200, "Seeders ejecutados", data=response_data)
-    except Exception as e:
-        return response(500, f"Error: {str(e)}", error=str(e))
-```
+# @permission_classes([AllowAny])
 
-#### 3. Endpoint de Status
+# def seed_database(request):
 
-```python
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def seeder_status(request):
-    """Estado de los datos"""
-    try:
-        response_data = {
-            'users': User.objects.count(),
-            'tu_entidad': TuModelo.objects.count(),
-        }
-        return response(200, "Estado obtenido", data=response_data)
-    except Exception as e:
-        return response(500, f"Error: {str(e)}")
-```
+# ...
 
----
+3. Endpoint de Status (Si tienes este archivo)
 
-## 15. Checklist de Desarrollo
+# @api_view(['GET'])
 
-### ✅ Al crear una nueva funcionalidad:
+# @permission_classes([AllowAny])
 
-1. **Planificación**
+# def seeder_status(request):
 
-   - [ ] ¿Necesito una nueva App o puedo usar una existente?
-   - [ ] ¿Qué modelos necesito?
-   - [ ] ¿Qué endpoints necesito?
-   - [ ] ¿Qué roles pueden acceder?
+# ...
 
-2. **Modelos** (`models.py`)
+15. Checklist de Desarrollo
 
-   - [ ] Hereda de `BaseModel`
-   - [ ] Usa enums para choices
-   - [ ] Implementa `__str__()`
-   - [ ] Define campos requeridos correctamente
+✅ Al crear una nueva funcionalidad:
 
-3. **Enums** (`config/enums.py`)
+Planificación
 
-   - [ ] Agrega nuevos enums si es necesario
-   - [ ] Implementa `choices()` y `get_label()`
-   - [ ] Documenta cada opción
+[ ] ¿Necesito una nueva App o puedo usar una existente?
 
-4. **Serializers** (`serializers.py`)
+[ ] ¿Qué modelos necesito?
 
-   - [ ] Implementa validaciones personalizadas
-   - [ ] Define `read_only_fields` apropiadamente
-   - [ ] Usa `extra_kwargs` para campos sensibles
+[ ] ¿Qué endpoints necesito?
 
-5. **Views** (`views.py`)
+[ ] ¿Qué roles pueden acceder?
 
-   - [ ] Implementa autenticación (`JWTAuthentication`)
-   - [ ] Define permisos apropiados
-   - [ ] Usa el sistema de respuestas estandarizado
-   - [ ] Implementa filtros y paginación en `list()`
+Modelos (models.py)
 
-6. **Permisos** (`permissions.py`)
+[ ] Hereda de BaseModel
 
-   - [ ] Define permisos específicos si es necesario
-   - [ ] Usa `require_roles()` para permisos por rol
+[ ] Usa enums para choices
 
-7. **Utils** (`utils.py`)
+[ ] Implementa **str**()
 
-   - [ ] Implementa funciones auxiliares reutilizables
-   - [ ] Documenta cada función
+[ ] Define campos requeridos correctamente
 
-8. **URLs** (`config/urls.py`)
+Enums (config/enums.py o constants/)
 
-   - [ ] Registra ViewSets en el router
-   - [ ] Define paths para APIViews específicas
-   - [ ] Usa nombres descriptivos
+[ ] Agrega nuevos enums si es necesario
 
-9. **Documentación Swagger**
+[ ] Implementa choices() y get_label()
 
-   - [ ] Usa `@extend_schema` en todas las views
-   - [ ] Define tags apropiados
-   - [ ] Documenta parámetros y responses
-   - [ ] Usa serializers estándar para responses
+[ ] Documenta cada opción
 
-10. **Seeders** (`seeders/`)
+Serializers (serializers.py)
 
-    - [ ] Crea seeder para tu entidad
-    - [ ] Usa pandas para generar datos
-    - [ ] Agrega a `seed_database()`
-    - [ ] Agrega a `seeder_status()`
+[ ] Implementa validaciones personalizadas
 
-11. **Testing**
+[ ] Define read_only_fields apropiadamente
 
-    - [ ] Ejecuta migraciones: `python manage.py makemigrations && python manage.py migrate`
-    - [ ] Prueba seeders: `GET /api/seeder/seed/`
-    - [ ] Verifica Swagger: `http://localhost:8000/api/docs/`
-    - [ ] Prueba todos los endpoints
-    - [ ] Verifica permisos por rol
+[ ] Usa extra_kwargs para campos sensibles
 
-12. **Documentación**
-    - [ ] Actualiza esta guía si introduces nuevos patrones
-    - [ ] Documenta APIs específicas
-    - [ ] Actualiza README del proyecto
+Servicios (services.py)
 
-### 🎯 Buenas Prácticas
+[ ] Implementa lógica de negocio
 
-- **Consistencia**: Sigue siempre los patrones establecidos
-- **Reutilización**: Usa componentes centralizados (`BaseModel`, enums, response system)
-- **Seguridad**: Siempre implementa autenticación y permisos apropiados
-- **Documentación**: Documenta todo en Swagger y código
-- **Testing**: Prueba con seeders antes de producción
-- **Performance**: Implementa filtros y paginación en listados
-- **Mantenibilidad**: Código limpio, nombres descriptivos, separación de responsabilidades
+[ ] Maneja errores con try...except
 
-### 🔧 Comandos Útiles
+[ ] Usa config/response.py para devolver respuestas
 
-```bash
+Vistas (views.py)
+
+[ ] Implementa autenticación (IsAuthenticated)
+
+[ ] Define permisos (HasPermission, get_permissions)
+
+[ ] Llama al servicio y retorna su respuesta
+
+[ ] Valida entrada con serializer.is_valid(raise_exception=True)
+
+Permisos (constants/permissions.py)
+
+[ ] Define nuevos permisos en el Enum si es necesario
+
+[ ] Asigna los permisos en views.py
+
+URLs (config/urls.py)
+
+[ ] Registra ViewSets en el router
+
+[ ] Define paths para APIViews específicas
+
+[ ] Usa nombres descriptivos
+
+Documentación Swagger
+
+[ ] Usa @extend_schema en todas las views
+
+[ ] Define tags apropiados
+
+[ ] Documenta parámetros y responses
+
+Seeders (Opcional)
+
+[ ] Crea seeder para tu entidad
+
+[ ] Usa pandas para generar datos
+
+Testing
+
+[ ] Ejecuta migraciones: python manage.py makemigrations && python manage.py migrate
+
+[ ] Prueba seeders (si aplica)
+
+[ ] Verifica Swagger: http://localhost:8000/api/docs/
+
+[ ] Prueba todos los endpoints (Postman, etc.)
+
+[ ] Verifica permisos por rol
+
+Documentación
+
+[ ] Actualiza esta guía si introduces nuevos patrones
+
+[ ] Documenta APIs específicas
+
+[ ] Actualiza README del proyecto
+
+🎯 Buenas Prácticas
+
+Consistencia: Sigue siempre los patrones establecidos
+
+Reutilización: Usa componentes centralizados (BaseModel, enums, response system)
+
+Seguridad: Siempre implementa autenticación y permisos apropiados
+
+Documentación: Documenta todo en Swagger y código
+
+Testing: Prueba con seeders antes de producción
+
+Performance: Implementa filtros y paginación en listados
+
+Mantenibilidad: Código limpio, nombres descriptivos, separación de responsabilidades
+
+🔧 Comandos Útiles
+
 # Crear migraciones
-python manage.py makemigrations
+
+python manage.py makemigrations users
 
 # Aplicar migraciones
+
 python manage.py migrate
 
 # Ejecutar servidor
+
 python manage.py runserver
 
 # Crear superusuario
+
 python manage.py createsuperuser
-
-# Ejecutar seeders
-curl http://localhost:8000/api/seeder/seed/
-
-# Ver estado de seeders
-curl http://localhost:8000/api/seeder/status/
-```
-
----
-
-## 🚀 Inicio Rápido
-
-Para desarrollar una nueva funcionalidad siguiendo esta guía:
-
-1. **Crea la app**: `python manage.py startapp mi_modulo`
-2. **Agrega a INSTALLED_APPS** en `settings.py`
-3. **Sigue el flujo paso a paso** definido en la sección 4
-4. **Usa el checklist** de la sección 15
-5. **Prueba con seeders** y Swagger
-
-¡Listo! Tu nueva funcionalidad seguirá todos los estándares del proyecto.
-
----
-
-**Nota**: Esta guía está basada en el análisis del módulo `user` y debe actualizarse conforme evolucionen los patrones del proyecto.
