@@ -23,7 +23,7 @@ class Permissions(Enum):
     @classmethod
     def choices(cls):
         """Devuelve las opciones para usar en Django models"""
-        return [(status.value, status.get_label()) for status in cls]
+        return [(status.value, status.name) for status in cls]
     
     @classmethod
     def values(cls):
