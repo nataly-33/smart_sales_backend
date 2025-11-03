@@ -90,59 +90,17 @@ O para producción, usa el script de entrada:
 bash entrypoint.sh
 ```
 
-## Endpoints Principales
+## 📚 Documentación API
 
-### Autenticación
+- Swagger UI: http://localhost:8000/api/docs/
+- ReDoc: http://localhost:8000/api/redoc/
+- Admin: http://localhost:8000/admin/
 
-POST /api/auth/login/ Inicio de sesión para todos los roles
+## 👥 Usuarios de Prueba
 
-### Productos
-
-GET /api/product/ Listar productos vendibles.
-
-### Ventas
-
-POST /api/sale/pos/ Registrar venta directa (POS).
-
-### Reportes
-
-POST /api/report/dinamic/ Generar reporte vía prompt
-
-### IA
-
-GET /api/ia/prediction/ Obtener datos para el Dashboard de Predicción
-
-### Documentación
-
-/api/docs/ Documentación Swagger de la API.
-
-## Estructura del Proyecto (Paquetes)smart_sales/
-
-```
-config/              # Configuración Django
-  ├── settings.py
-  ├── urls.py
-  └── ...
-├── users/           # Gestión de Usuarios, Roles, Permisos (CU1-5)
-  ├── models.py           # Modelo User con roles
-  ├── views.py            # Vistas de autenticación y CRUD
-  ├── permissions.py      # Permisos personalizados
-  ├── serializers.py      # Serializers para API
-  └── utils.py            # Utilidades (email, tokens)
-├── branch/          # Gestión de Sucursales y Estructura (CU7)
-├── product/         # Catálogo, Tallas, SKU, Stock (CU6, CU8-11)
-├── sales/           # Venta, Carrito, Historial, Descuentos (CU12-16)
-├── logistic/        # Agencias de Reparto, Envíos (CU17-18)
-├── ia/              # Lógica de Machine Learning (CU21-22)
-├── report/          # Reportes Dinámicos (CU20)
-└── seeders/         # Generación de datos de prueba (incluye datos IA)
-```
-
-## Notas de Desarrollo
-
-- Base de datos por defecto: PostgreSQL
-- Autenticación: JWT con refresh tokens
-- Documentación automática con drf-spectacular
-- CORS habilitado para desarrollo
-- IA: Random Forest Regressor (scikit-learn)
-  Documentación: Swagger (drf-spectacular)
+| Rol      | Email                      | Password      |
+| -------- | -------------------------- | ------------- |
+| Admin    | admin@smartsales365.com    | Admin2024!    |
+| Empleado | empleado@smartsales365.com | Empleado2024! |
+| Cliente  | cliente@gmail.com          | Cliente2024!  |
+| Delivery | delivery@smartsales365.com | Delivery2024! |
