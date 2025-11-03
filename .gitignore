@@ -1,18 +1,49 @@
-# Entorno virtual
-pycache/
+# Python
 __pycache__/
-.env
+*.py[cod]
+*$py.class
+*.so
+.Python
 venv/
 vane/
-*.pyc
-
-# Base de datos local
-db.sqlite3
-
-# Archivos estáticos
-/static
-/media
-
-# Configuraciones sensibles
 env/
+ENV/
+
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Environment
+.env
+.env.production
+.env.*.local
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# OS
 .DS_Store
+Thumbs.db
+*.bak
+
+# Reports generados
+media/reports/*.pdf
+media/reports/*.xlsx
+
+# ML Models
+apps/ai/models_ml/*.pkl
+!apps/ai/models_ml/.gitkeep
