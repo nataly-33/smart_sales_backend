@@ -9,8 +9,13 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
 from apps.accounts.models import User, Role, Permission
+from apps.products.models import Categoria, Marca, Talla, Prenda, StockPrenda, ImagenPrenda
 from apps.core.constants import PERMISSIONS, ROLES
+from apps.customers.models import Direccion, Favoritos
+from apps.cart.models import Carrito, ItemCarrito
 
+from decimal import Decimal
+import random
 
 def seed_permissions():
     """Crear permisos del sistema"""
@@ -170,6 +175,259 @@ def seed_users():
     
     return usuarios_creados
 
+def seed_categorias():
+    """Crear categorías de ropa femenina"""
+    print("\n📂 Creando categorías...")
+    
+    categorias_data = [
+        {'nombre': 'Vestidos', 'descripcion': 'Vestidos elegantes y casuales'},
+        {'nombre': 'Blusas', 'descripcion': 'Blusas y tops para toda ocasión'},
+        {'nombre': 'Pantalones', 'descripcion': 'Pantalones de vestir y casuales'},
+        {'nombre': 'Faldas', 'descripcion': 'Faldas de diferentes estilos'},
+        {'nombre': 'Jeans', 'descripcion': 'Denim de alta calidad'},
+        {'nombre': 'Chaquetas', 'descripcion': 'Chaquetas y abrigos'},
+        {'nombre': 'Conjuntos', 'descripcion': 'Conjuntos coordinados'},
+        {'nombre': 'Ropa Deportiva', 'descripcion': 'Activewear y sportswear'},
+    ]
+    
+    categorias = []
+    for cat_data in categorias_data:
+        cat, created = Categoria.objects.get_or_create(
+            nombre=cat_data['nombre'],
+            defaults={'descripcion': cat_data['descripcion'], 'activa': True}
+        )
+        if created:
+            print(f"  ✅ {cat.nombre}")
+        categorias.append(cat)
+    
+    return categorias
+
+
+def seed_marcas():
+    """Crear marcas"""
+    print("\n🏷️ Creando marcas...")
+    
+    marcas_data = [
+        'Zara', 'H&M', 'Forever 21', 'Mango', 'Pull&Bear',
+        'Bershka', 'Stradivarius', 'Shein', 'Pretty Little Thing', 'Boohoo'
+    ]
+    
+    marcas = []
+    for nombre in marcas_data:
+        marca, created = Marca.objects.get_or_create(
+            nombre=nombre,
+            defaults={'descripcion': f'Ropa de {nombre}', 'activa': True}
+        )
+        if created:
+            print(f"  ✅ {nombre}")
+        marcas.append(marca)
+    
+    return marcas
+
+
+def seed_tallas():
+    """Crear tallas"""
+    print("\n📏 Creando tallas...")
+    
+    tallas_data = [
+        ('XS', 1), ('S', 2), ('M', 3), ('L', 4), ('XL', 5), ('XXL', 6)
+    ]
+    
+    tallas = []
+    for nombre, orden in tallas_data:
+        talla, created = Talla.objects.get_or_create(
+            nombre=nombre,
+            defaults={'orden': orden}
+        )
+        if created:
+            print(f"  ✅ {nombre}")
+        tallas.append(talla)
+    
+    return tallas
+
+
+def seed_prendas(categorias, marcas, tallas):
+    """Crear 50+ prendas de ejemplo"""
+    print("\n👗 Creando prendas...")
+    
+    from faker import Faker
+    fake = Faker('es_ES')
+    
+    colores = [
+        'Negro', 'Blanco', 'Azul', 'Rojo', 'Verde', 'Amarillo',
+        'Rosa', 'Morado', 'Gris', 'Beige', 'Naranja', 'Turquesa'
+    ]
+    
+    materiales = [
+        'Algodón 100%', 'Poliéster', 'Mezcla de algodón',
+        'Denim', 'Seda', 'Lino', 'Viscosa', 'Elastano'
+    ]
+    
+    nombres_base = [
+        'Vestido Elegante', 'Blusa Casual', 'Pantalón de Vestir',
+        'Falda Midi', 'Jean Skinny', 'Chaqueta Denim',
+        'Conjunto Deportivo', 'Top Crop', 'Cardigan',
+        'Blazer', 'Vestido Maxi', 'Short', 'Palazzo',
+        'Camisa', 'Sudadera', 'Leggings', 'Jumpsuit'
+    ]
+    
+    prendas_creadas = []
+    
+    for i in range(60):  # Crear 60 prendas
+        nombre_base = random.choice(nombres_base)
+        color = random.choice(colores)
+        nombre = f"{nombre_base} {color}"
+        
+        # Evitar duplicados
+        if Prenda.objects.filter(nombre=nombre).exists():
+            nombre = f"{nombre} {i+1}"
+        
+        prenda = Prenda.objects.create(
+            nombre=nombre,
+            descripcion=fake.text(max_nb_chars=200),
+            precio=Decimal(random.randint(100, 800)),
+            marca=random.choice(marcas),
+            color=color,
+            material=random.choice(materiales),
+            activa=True,
+            destacada=random.random() < 0.3,  # 30% destacadas
+            es_novedad=random.random() < 0.2   # 20% novedades
+        )
+        
+        # Asignar 1-3 categorías aleatorias
+        num_categorias = random.randint(1, 3)
+        prenda.categorias.set(random.sample(categorias, num_categorias))
+        
+        # Asignar todas las tallas o algunas aleatorias
+        if random.random() < 0.7:  # 70% tienen todas las tallas
+            prenda.tallas_disponibles.set(tallas)
+        else:
+            num_tallas = random.randint(3, 5)
+            prenda.tallas_disponibles.set(random.sample(tallas, num_tallas))
+        
+        # Crear stocks para cada talla disponible
+        for talla in prenda.tallas_disponibles.all():
+            StockPrenda.objects.create(
+                prenda=prenda,
+                talla=talla,
+                cantidad=random.randint(0, 50),
+                stock_minimo=5
+            )
+        
+        prendas_creadas.append(prenda)
+        
+        if (i + 1) % 10 == 0:
+            print(f"  ✅ {i + 1} prendas creadas...")
+    
+    print(f"Total: {len(prendas_creadas)} prendas creadas")
+    return prendas_creadas
+
+def seed_direcciones(usuarios):
+    """Crear direcciones para clientes"""
+    print("\n🏠 Creando direcciones...")
+    
+    # Solo para el cliente de prueba
+    cliente = next((u for u in usuarios if u.email == 'cliente@gmail.com'), None)
+    
+    if not cliente:
+        print("  ⚠️  Cliente de prueba no encontrado")
+        return []
+    
+    direcciones_data = [
+        {
+            'nombre_completo': 'Carlos Cliente',
+            'telefono': '+591 70000003',
+            'direccion_linea1': 'Av. Heroínas #1234',
+            'direccion_linea2': 'Entre Av. Oquendo y San Martín',
+            'ciudad': 'Cochabamba',
+            'departamento': 'Cochabamba',
+            'codigo_postal': '',
+            'pais': 'Bolivia',
+            'referencia': 'Cerca del centro comercial',
+            'es_principal': True
+        },
+        {
+            'nombre_completo': 'Carlos Cliente',
+            'telefono': '+591 70000003',
+            'direccion_linea1': 'Calle Sucre #567',
+            'direccion_linea2': '',
+            'ciudad': 'Cochabamba',
+            'departamento': 'Cochabamba',
+            'codigo_postal': '',
+            'pais': 'Bolivia',
+            'referencia': 'Casa color amarillo',
+            'es_principal': False
+        }
+    ]
+    
+    direcciones = []
+    for dir_data in direcciones_data:
+        direccion = Direccion.objects.create(
+            usuario=cliente,
+            **dir_data
+        )
+        direcciones.append(direccion)
+        print(f"  ✅ {direccion.ciudad} - {'Principal' if direccion.es_principal else 'Secundaria'}")
+    
+    return direcciones
+
+
+def seed_favoritos(usuarios, prendas):
+    """Crear favoritos para el cliente"""
+    print("\n⭐ Creando favoritos...")
+    
+    cliente = next((u for u in usuarios if u.email == 'cliente@gmail.com'), None)
+    
+    if not cliente or len(prendas) < 5:
+        print("  ⚠️  Cliente o prendas insuficientes")
+        return []
+    
+    # Agregar 5 prendas aleatorias a favoritos
+    import random
+    prendas_favoritas = random.sample(prendas, 5)
+    
+    favoritos = []
+    for prenda in prendas_favoritas:
+        favorito = Favoritos.objects.create(
+            usuario=cliente,
+            prenda=prenda
+        )
+        favoritos.append(favorito)
+        print(f"  ✅ {prenda.nombre}")
+    
+    return favoritos
+
+
+def seed_carritos(usuarios, prendas, tallas):
+    """Crear carritos con items para clientes"""
+    print("\n🛒 Creando carritos...")
+    
+    cliente = next((u for u in usuarios if u.email == 'cliente@gmail.com'), None)
+    
+    if not cliente or len(prendas) < 3:
+        print("  ⚠️  Cliente o prendas insuficientes")
+        return None
+    
+    # Crear carrito
+    carrito = Carrito.objects.create(usuario=cliente)
+    
+    # Agregar 3 items aleatorios
+    import random
+    prendas_carrito = random.sample(prendas, 3)
+    
+    for prenda in prendas_carrito:
+        talla_disponible = prenda.tallas_disponibles.first()
+        if talla_disponible:
+            ItemCarrito.objects.create(
+                carrito=carrito,
+                prenda=prenda,
+                talla=talla_disponible,
+                cantidad=random.randint(1, 3),
+                precio_unitario=prenda.precio
+            )
+            print(f"  ✅ {prenda.nombre} - Talla {talla_disponible.nombre}")
+    
+    return carrito
 
 def seed_all():
     """Ejecutar todos los seeders"""
@@ -186,6 +444,27 @@ def seed_all():
     # 3. Crear usuarios
     usuarios_creados = seed_users()
     
+     # 4. Categorías
+    categorias = seed_categorias()
+    
+    # 5. Marcas
+    marcas = seed_marcas()
+    
+    # 6. Tallas
+    tallas = seed_tallas()
+    
+    # 7. Prendas (50+)
+    prendas = seed_prendas(categorias, marcas, tallas)
+    
+    # 8. Direcciones
+    direcciones = seed_direcciones(usuarios_creados)
+    
+    # 9. Favoritos
+    favoritos = seed_favoritos(usuarios_creados, prendas)
+    
+    # 10. Carritos
+    carrito = seed_carritos(usuarios_creados, prendas, tallas)
+    
     # Resumen final
     print("\n" + "="*60)
     print("🎉 ¡SEEDERS COMPLETADOS!")
@@ -194,14 +473,25 @@ def seed_all():
     print(f"  - Permisos: {Permission.objects.count()}")
     print(f"  - Roles: {Role.objects.count()}")
     print(f"  - Usuarios: {User.objects.count()}")
+    print(f"  - Categorías: {Categoria.objects.count()}")
+    print(f"  - Marcas: {Marca.objects.count()}")
+    print(f"  - Tallas: {Talla.objects.count()}")
+    print(f"  - Prendas: {Prenda.objects.count()}")
+    print(f"  - Stocks: {StockPrenda.objects.count()}")
+    print(f"  - Direcciones: {Direccion.objects.count()}")
+    print(f"  - Favoritos: {Favoritos.objects.count()}")
+    print(f"  - Carritos: {Carrito.objects.count()}")
+    if carrito:
+        print(f"  - Items en carrito: {carrito.total_items}")
+    
     print("\n📋 CREDENCIALES DE ACCESO:")
     print("-" * 60)
     
     usuarios_test = [
-        ('Admin', 'admin@smartsales.com', 'admin2024*'),
-        ('Empleado', 'empleado@smartsales.com', 'empleado2024*'),
-        ('Cliente', 'cliente@gmail.com', 'cliente2024*'),
-        ('Delivery', 'delivery@smartsales.com', 'delivery2024*')
+        ('Admin', 'admin@smartsales365.com', 'Admin2024!'),
+        ('Empleado', 'empleado@smartsales365.com', 'Empleado2024!'),
+        ('Cliente', 'cliente@gmail.com', 'Cliente2024!'),
+        ('Delivery', 'delivery@smartsales365.com', 'Delivery2024!')
     ]
     
     for rol, email, password in usuarios_test:
@@ -209,8 +499,8 @@ def seed_all():
     
     print("-" * 60)
     print("\n✅ Puedes iniciar sesión con cualquiera de estas cuentas")
-    print("🚀 Ejecuta: python manage.py runserver\n")
-
+    print("🚀 Ejecuta: python manage.py runserver")
+    print("📚 Swagger: http://localhost:8000/api/docs/\n")
 
 if __name__ == '__main__':
     seed_all()
