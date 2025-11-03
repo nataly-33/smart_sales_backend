@@ -19,6 +19,9 @@ urlpatterns = [
     
     # Apps URLs
     path('api/auth/', include('apps.accounts.urls')),
+    path('api/products/', include('apps.products.urls')),
+    path('api/customers/', include('apps.customers.urls')),
+    path('api/cart/', include('apps.cart.urls')),
 ]
 
 # Servir archivos media en desarrollo
