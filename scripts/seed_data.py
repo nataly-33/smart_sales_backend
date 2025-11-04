@@ -13,6 +13,8 @@ from apps.products.models import Categoria, Marca, Talla, Prenda, StockPrenda, I
 from apps.core.constants import PERMISSIONS, ROLES
 from apps.customers.models import Direccion, Favoritos
 from apps.cart.models import Carrito, ItemCarrito
+from apps.orders.models import MetodoPago, Pedido, DetallePedido, Pago
+from apps.core.constants import METODOS_PAGO
 
 from decimal import Decimal
 import random
@@ -428,6 +430,136 @@ def seed_carritos(usuarios, prendas, tallas):
             print(f"  ✅ {prenda.nombre} - Talla {talla_disponible.nombre}")
     
     return carrito
+def seed_metodos_pago():
+    """Crear métodos de pago"""
+    print("\n💳 Creando métodos de pago...")
+    
+    metodos_data = [
+        {
+            'codigo': 'efectivo',
+            'nombre': 'Efectivo',
+            'descripcion': 'Pago en efectivo al recibir el pedido',
+            'activo': True,
+            'requiere_procesador': False
+        },
+        {
+            'codigo': 'tarjeta',
+            'nombre': 'Tarjeta de Crédito/Débito',
+            'descripcion': 'Pago con tarjeta via Stripe',
+            'activo': True,
+            'requiere_procesador': True,
+            'configuracion': {'procesador': 'stripe'}
+        },
+        {
+            'codigo': 'paypal',
+            'nombre': 'PayPal',
+            'descripcion': 'Pago con cuenta PayPal',
+            'activo': True,
+            'requiere_procesador': True,
+            'configuracion': {'procesador': 'paypal'}
+        },
+        {
+            'codigo': 'billetera',
+            'nombre': 'Billetera Virtual',
+            'descripcion': 'Pago con saldo de billetera virtual',
+            'activo': True,
+            'requiere_procesador': False
+        }
+    ]
+    
+    metodos = []
+    for metodo_data in metodos_data:
+        metodo, created = MetodoPago.objects.get_or_create(
+            codigo=metodo_data['codigo'],
+            defaults=metodo_data
+        )
+        if created:
+            print(f"  ✅ {metodo.nombre}")
+        metodos.append(metodo)
+    
+    return metodos
+
+
+def seed_pedidos_ejemplo(usuarios, prendas, tallas, direcciones, metodos_pago):
+    """Crear pedidos de ejemplo"""
+    print("\n📦 Creando pedidos de ejemplo...")
+    
+    cliente = next((u for u in usuarios if u.email == 'cliente@gmail.com'), None)
+    
+    if not cliente or not direcciones or len(prendas) < 3:
+        print("  ⚠️  Datos insuficientes para crear pedidos")
+        return []
+    
+    import random
+    from decimal import Decimal
+    from django.db import transaction
+    
+    pedidos = []
+    
+    # Crear 3 pedidos de ejemplo
+    for i in range(3):
+        with transaction.atomic():
+            # Seleccionar 2-4 prendas aleatorias
+            num_items = random.randint(2, 4)
+            prendas_pedido = random.sample(prendas, num_items)
+            
+            # Calcular totales
+            subtotal = Decimal('0.00')
+            items_data = []
+            
+            for prenda in prendas_pedido:
+                talla = prenda.tallas_disponibles.first()
+                if talla:
+                    cantidad = random.randint(1, 2)
+                    precio = prenda.precio
+                    items_data.append({
+                        'prenda': prenda,
+                        'talla': talla,
+                        'cantidad': cantidad,
+                        'precio_unitario': precio
+                    })
+                    subtotal += precio * cantidad
+            
+            descuento = Decimal('0.00')
+            costo_envio = Decimal('10.00')
+            total = subtotal - descuento + costo_envio
+            
+            # Crear pedido
+            estados_posibles = ['pago_recibido', 'confirmado', 'preparando', 'entregado']
+            estado = random.choice(estados_posibles)
+            
+            pedido = Pedido.objects.create(
+                usuario=cliente,
+                direccion_envio=direcciones[0],
+                subtotal=subtotal,
+                descuento=descuento,
+                costo_envio=costo_envio,
+                total=total,
+                estado=estado,
+                notas_cliente='Pedido de prueba'
+            )
+            
+            # Crear detalles
+            for item_data in items_data:
+                DetallePedido.objects.create(
+                    pedido=pedido,
+                    **item_data
+                )
+            
+            # Crear pago
+            metodo = random.choice([m for m in metodos_pago if m.codigo != 'efectivo'])
+            Pago.objects.create(
+                pedido=pedido,
+                metodo_pago=metodo,
+                monto=total,
+                estado='completado',
+                transaction_id=f'TEST-{pedido.numero_pedido}'
+            )
+            
+            pedidos.append(pedido)
+            print(f"  ✅ Pedido {pedido.numero_pedido} - Estado: {estado} - Total: ${total}")
+    
+    return pedidos
 
 def seed_all():
     """Ejecutar todos los seeders"""
@@ -465,6 +597,12 @@ def seed_all():
     # 10. Carritos
     carrito = seed_carritos(usuarios_creados, prendas, tallas)
     
+    # 11. Métodos de pago
+    metodos_pago = seed_metodos_pago()
+    
+    # 12. Pedidos de ejemplo
+    pedidos = seed_pedidos_ejemplo(usuarios_creados, prendas, tallas, direcciones, metodos_pago)
+    
     # Resumen final
     print("\n" + "="*60)
     print("🎉 ¡SEEDERS COMPLETADOS!")
@@ -483,6 +621,9 @@ def seed_all():
     print(f"  - Carritos: {Carrito.objects.count()}")
     if carrito:
         print(f"  - Items en carrito: {carrito.total_items}")
+    print(f"  - Métodos de pago: {MetodoPago.objects.count()}")
+    print(f"  - Pedidos: {Pedido.objects.count()}")
+    print(f"  - Pagos: {Pago.objects.count()}")
     
     print("\n📋 CREDENCIALES DE ACCESO:")
     print("-" * 60)
@@ -501,6 +642,7 @@ def seed_all():
     print("\n✅ Puedes iniciar sesión con cualquiera de estas cuentas")
     print("🚀 Ejecuta: python manage.py runserver")
     print("📚 Swagger: http://localhost:8000/api/docs/\n")
+
 
 if __name__ == '__main__':
     seed_all()

@@ -124,6 +124,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         reset_database(method=args.method, dry_run=args.dry_run)
+        print("Reset de base de datos completado.")
     except Exception as exc:  # pragma: no cover - depende del entorno y modelos
         print("Error durante la eliminación:", exc)
         return 2
