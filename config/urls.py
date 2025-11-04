@@ -22,6 +22,7 @@ urlpatterns = [
     path('api/products/', include('apps.products.urls')),
     path('api/customers/', include('apps.customers.urls')),
     path('api/cart/', include('apps.cart.urls')),
+    path('api/orders/', include('apps.orders.urls')),
 ]
 
 # Servir archivos media en desarrollo

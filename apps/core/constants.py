@@ -16,30 +16,36 @@ PERMISSIONS = {
     'dashboard': ['leer'],
 }
 
-# Roles del sistema
 ROLES = ['Admin', 'Empleado', 'Cliente', 'Delivery']
 
-# Estados de pedido
 ESTADOS_PEDIDO = [
-    ('pendiente', 'Pendiente'),
+    ('pendiente', 'Pendiente de pago'),
+    ('pago_recibido', 'Pago recibido'),
     ('confirmado', 'Confirmado'),
     ('preparando', 'Preparando'),
     ('enviado', 'Enviado'),
     ('entregado', 'Entregado'),
     ('cancelado', 'Cancelado'),
+    ('reembolsado', 'Reembolsado'),
 ]
 
-# Métodos de pago
 METODOS_PAGO = [
     ('efectivo', 'Efectivo'),
     ('tarjeta', 'Tarjeta'),
+    ('paypal', 'PayPal'),
     ('billetera', 'Billetera Virtual'),
 ]
 
-# Tallas disponibles
+ESTADOS_PAGO = [
+    ('pendiente', 'Pendiente'),
+    ('procesando', 'Procesando'),
+    ('completado', 'Completado'),
+    ('fallido', 'Fallido'),
+    ('reembolsado', 'Reembolsado'),
+]
+
 TALLAS = ['XS', 'S', 'M', 'L', 'XL', 'XXL']
 
-# Colores disponibles
 COLORES = [
     'Rojo', 'Azul', 'Verde', 'Amarillo', 'Negro', 'Celeste',
     'Blanco', 'Gris', 'Rosa', 'Morado', 'Naranja', 'Lavanda'

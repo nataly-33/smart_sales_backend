@@ -34,6 +34,7 @@ LOCAL_APPS = [
     'apps.products',
     'apps.customers',
     'apps.cart',
+    'apps.orders',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -150,13 +151,7 @@ SPECTACULAR_SETTINGS = {
                 'bearerFormat': 'JWT',
             }
         }
-    ],
-    
-    # Tags
-    'TAGS': [
-        {'name': 'auth', 'description': 'Autenticación y autorización'},
-        {'name': 'users', 'description': 'Gestión de usuarios'},
-    ],
+    ]
 }
 
 # AWS S3 Configuration
@@ -187,3 +182,13 @@ else:
     STATIC_URL = '/static/'
     MEDIA_URL = '/media/'
     MEDIA_ROOT = BASE_DIR / 'media'
+
+# Stripe Configuration
+STRIPE_PUBLIC_KEY = config('STRIPE_PUBLIC_KEY', default='')
+STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
+STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')
+
+# PayPal Configuration
+PAYPAL_CLIENT_ID = config('PAYPAL_CLIENT_ID', default='')
+PAYPAL_CLIENT_SECRET = config('PAYPAL_CLIENT_SECRET', default='')
+PAYPAL_MODE = config('PAYPAL_MODE', default='sandbox')  
