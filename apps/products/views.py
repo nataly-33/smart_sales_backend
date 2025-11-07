@@ -78,6 +78,39 @@ class PrendaViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve', 'search']:
             return [AllowAny()]
         return [IsEmpleadoOrAdmin()]
+
+    def get_object(self):
+        """Primero mira si existe el slug, luego por PK solo si el valor de búsqueda
+        es un UUID válido. Esto evita intentos de coerción de slugs no UUID en
+        el campo UUID PK (lo que generó ValidationError y produjo 500s).
+        """
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        lookup_value = self.kwargs.get(lookup_url_kwarg)
+
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # First try lookup by slug
+        try:
+            obj = queryset.get(slug=lookup_value)
+        except Prenda.DoesNotExist:
+            # If not found by slug, only attempt PK lookup when the value
+            # is a valid UUID to avoid Django validation errors.
+            import uuid
+            try:
+                uuid.UUID(str(lookup_value))
+            except (ValueError, TypeError):
+                from django.http import Http404
+                raise Http404
+
+            try:
+                obj = queryset.get(pk=lookup_value)
+            except Prenda.DoesNotExist:
+                from django.http import Http404
+                raise Http404
+
+        # May raise a permission denied
+        self.check_object_permissions(self.request, obj)
+        return obj
     
     def get_queryset(self):
         queryset = super().get_queryset()
