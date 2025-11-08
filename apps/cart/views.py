@@ -73,11 +73,9 @@ class CarritoViewSet(viewsets.GenericViewSet):
             'carrito': carrito_serializer.data
         }, status=status.HTTP_201_CREATED)
     
-    @action(detail=False, methods=['put'])
-    def actualizar_item(self, request):
+    @action(detail=False, methods=['put'], url_path='items/(?P<item_id>[^/.]+)/actualizar')
+    def actualizar_item(self, request, item_id=None):
         """Actualizar cantidad de un item del carrito"""
-        item_id = request.data.get('item_id')
-        
         if not item_id:
             return Response(
                 {'error': 'item_id es requerido'},
@@ -129,11 +127,9 @@ class CarritoViewSet(viewsets.GenericViewSet):
             'carrito': carrito_serializer.data
         })
     
-    @action(detail=False, methods=['delete'])
-    def eliminar_item(self, request):
+    @action(detail=False, methods=['delete'], url_path='items/(?P<item_id>[^/.]+)/eliminar')
+    def eliminar_item(self, request, item_id=None):
         """Eliminar item del carrito"""
-        item_id = request.query_params.get('item_id')
-        
         if not item_id:
             return Response(
                 {'error': 'item_id es requerido'},
