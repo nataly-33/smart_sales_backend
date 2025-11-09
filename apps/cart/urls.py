@@ -1,13 +1,11 @@
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from django.urls import path
 from .views import CarritoViewSet
-
-router = DefaultRouter()
-router.register(r'', CarritoViewSet, basename='carrito')
+from django.http import JsonResponse
 
 urlpatterns = [
-    path('', include(router.urls)),
-    # Direct access to cart item operations with path parameters
+    path('mi_carrito/', CarritoViewSet.as_view({'get': 'mi_carrito'}), name='mi-carrito'),
+    path('agregar/', CarritoViewSet.as_view({'post': 'agregar'}), name='agregar-item'),
     path('items/<uuid:item_id>/actualizar/', CarritoViewSet.as_view({'put': 'actualizar_item'}), name='actualizar-item'),
     path('items/<uuid:item_id>/eliminar/', CarritoViewSet.as_view({'delete': 'eliminar_item'}), name='eliminar-item'),
+    path('limpiar/', CarritoViewSet.as_view({'post': 'limpiar'}), name='limpiar-carrito'),
 ]

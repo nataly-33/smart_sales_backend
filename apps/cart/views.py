@@ -1,8 +1,10 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
+import logging
+
+logger = logging.getLogger(__name__)
 
 from .models import Carrito, ItemCarrito
 from .serializers import (
@@ -21,16 +23,16 @@ class CarritoViewSet(viewsets.GenericViewSet):
         carrito, created = Carrito.objects.get_or_create(usuario=self.request.user)
         return carrito
     
-    @action(detail=False, methods=['get'])
     def mi_carrito(self, request):
         """Obtener carrito del usuario actual"""
         carrito = self.get_or_create_carrito()
+                
         serializer = self.get_serializer(carrito)
         return Response(serializer.data)
     
-    @action(detail=False, methods=['post'])
     def agregar(self, request):
         """Agregar item al carrito"""
+        logger.info(f"POST agregar - User: {request.user.id}, Data: {request.data}")
         serializer = AgregarItemCarritoSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -40,42 +42,63 @@ class CarritoViewSet(viewsets.GenericViewSet):
         cantidad = serializer.validated_data['cantidad']
         
         with transaction.atomic():
-            # Verificar si el item ya existe en el carrito
-            item, created = ItemCarrito.objects.get_or_create(
+            # Buscar item existente (incluyendo los eliminados lógicamente)
+            item_existente = ItemCarrito.objects.filter(
                 carrito=carrito,
                 prenda=prenda,
-                talla=talla,
-                deleted_at__isnull=True,
-                defaults={'cantidad': cantidad, 'precio_unitario': prenda.precio}
-            )
+                talla=talla
+            ).first()
             
-            if not created:
-                # Si ya existe, aumentar la cantidad
-                nueva_cantidad = item.cantidad + cantidad
+            if item_existente and item_existente.deleted_at is None:
+                # Si ya existe y no está eliminado, aumentar la cantidad
+                nueva_cantidad = item_existente.cantidad + cantidad
                 
-                # Verificar stock nuevamente
+                # Verificar stock
                 from apps.products.models import StockPrenda
                 stock = StockPrenda.objects.filter(prenda=prenda, talla=talla).first()
                 
                 if not stock or stock.cantidad < nueva_cantidad:
                     disponible = stock.cantidad if stock else 0
                     return Response({
-                        'error': f'Stock insuficiente. Solo hay {disponible} unidades disponibles y ya tienes {item.cantidad} en el carrito'
+                        'error': f'Stock insuficiente. Solo hay {disponible} unidades disponibles y ya tienes {item_existente.cantidad} en el carrito'
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
-                item.cantidad = nueva_cantidad
-                item.save()
+                item_existente.cantidad = nueva_cantidad
+                item_existente.save()
+                item = item_existente
+                
+            elif item_existente and item_existente.deleted_at is not None:
+                # Si existe pero está eliminado, reactivarlo
+                item_existente.deleted_at = None
+                item_existente.cantidad = cantidad
+                item_existente.precio_unitario = prenda.precio
+                item_existente.save()
+                item = item_existente
+            else:
+                # Crear nuevo item
+                item = ItemCarrito.objects.create(
+                    carrito=carrito,
+                    prenda=prenda,
+                    talla=talla,
+                    cantidad=cantidad,
+                    precio_unitario=prenda.precio
+                )
+        
+        # Actualizar el total del carrito
+        carrito.actualizar_total()
         
         # Devolver el carrito actualizado
         carrito_serializer = CarritoSerializer(carrito)
+        logger.info(f"Item agregado - Carrito total: {carrito.total}")
         return Response({
             'message': 'Producto agregado al carrito',
             'carrito': carrito_serializer.data
         }, status=status.HTTP_201_CREATED)
     
-    @action(detail=False, methods=['put'], url_path='items/(?P<item_id>[^/.]+)/actualizar')
     def actualizar_item(self, request, item_id=None):
         """Actualizar cantidad de un item del carrito"""
+        logger.info(f"PUT actualizar_item - User: {request.user.id}, Item: {item_id}, Data: {request.data}")
+        
         if not item_id:
             return Response(
                 {'error': 'item_id es requerido'},
@@ -90,7 +113,9 @@ class CarritoViewSet(viewsets.GenericViewSet):
                 carrito=carrito,
                 deleted_at__isnull=True
             )
+            logger.info(f"Item encontrado: {item.id} - {item.prenda.nombre}")
         except ItemCarrito.DoesNotExist:
+            logger.error(f"Item no encontrado: {item_id} para usuario {request.user.id}")
             return Response(
                 {'error': 'Item no encontrado en el carrito'},
                 status=status.HTTP_404_NOT_FOUND
@@ -102,34 +127,40 @@ class CarritoViewSet(viewsets.GenericViewSet):
         nueva_cantidad = serializer.validated_data['cantidad']
         
         # Verificar stock
-        tiene_stock, mensaje = item.verificar_stock()
-        if not tiene_stock:
-            return Response({'error': mensaje}, status=status.HTTP_400_BAD_REQUEST)
-        
         from apps.products.models import StockPrenda
         stock = StockPrenda.objects.filter(
             prenda=item.prenda,
             talla=item.talla
         ).first()
         
+        if not stock:
+            return Response({
+                'error': 'Producto no disponible'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
         if stock.cantidad < nueva_cantidad:
             return Response({
                 'error': f'Stock insuficiente. Solo hay {stock.cantidad} unidades disponibles'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        item.cantidad = nueva_cantidad
-        item.save()
+        if nueva_cantidad == 0:
+            # Si la cantidad es 0, eliminar el item
+            item.soft_delete()
+            message = 'Item eliminado del carrito'
+        else:
+            item.cantidad = nueva_cantidad
+            item.save()
+            message = 'Cantidad actualizada'
         
         # Devolver el carrito actualizado
         carrito_serializer = CarritoSerializer(carrito)
         return Response({
-            'message': 'Cantidad actualizada',
+            'message': message,
             'carrito': carrito_serializer.data
         })
     
-    @action(detail=False, methods=['delete'], url_path='items/(?P<item_id>[^/.]+)/eliminar')
     def eliminar_item(self, request, item_id=None):
-        """Eliminar item del carrito"""
+        """Eliminar item del carrito"""        
         if not item_id:
             return Response(
                 {'error': 'item_id es requerido'},
@@ -137,6 +168,7 @@ class CarritoViewSet(viewsets.GenericViewSet):
             )
         
         carrito = self.get_or_create_carrito()
+        logger.info(f"Buscando item {item_id} en carrito {carrito.id}")
         
         try:
             item = ItemCarrito.objects.get(
@@ -144,22 +176,26 @@ class CarritoViewSet(viewsets.GenericViewSet):
                 carrito=carrito,
                 deleted_at__isnull=True
             )
+            logger.info(f"✅ Item encontrado para eliminar: {item.id} - {item.prenda.nombre}")
+            
             item.soft_delete()
             
-            # Devolver el carrito actualizado
             carrito_serializer = CarritoSerializer(carrito)
+            logger.info(f"✅ Item eliminado - Carrito total: {carrito.total}")
             return Response({
                 'message': 'Producto eliminado del carrito',
                 'carrito': carrito_serializer.data
             })
             
-        except ItemCarrito.DoesNotExist:
+        except ItemCarrito.DoesNotExist as e:
+            logger.error(f"❌ Error completo: {str(e)}")
+            items_en_carrito = ItemCarrito.objects.filter(carrito=carrito, deleted_at__isnull=True)
+            
             return Response(
                 {'error': 'Item no encontrado en el carrito'},
                 status=status.HTTP_404_NOT_FOUND
             )
     
-    @action(detail=False, methods=['post'])
     def limpiar(self, request):
         """Vaciar el carrito"""
         carrito = self.get_or_create_carrito()

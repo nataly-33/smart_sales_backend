@@ -1,8 +1,9 @@
 from django.db import models
+from django.db.models import Sum, F
 from apps.core.models import BaseModel
 from apps.accounts.models import User
 from apps.products.models import Prenda, Talla
-
+from decimal import Decimal
 
 class Carrito(BaseModel):
     """Carrito de compras del usuario"""
@@ -23,24 +24,33 @@ class Carrito(BaseModel):
     
     @property
     def total_items(self):
-        """Total de items en el carrito"""
+        """Total de items ACTIVOS en el carrito"""
         return self.items.filter(deleted_at__isnull=True).count()
     
     @property
+    def cantidad_total_items(self):
+        """Cantidad total de productos (suma de cantidades)"""
+        result = self.items.filter(deleted_at__isnull=True).aggregate(
+            total=Sum('cantidad')
+        )
+        return result['total'] or 0
+    
+    @property
     def subtotal(self):
-        """Subtotal sin descuentos"""
-        items = self.items.filter(deleted_at__isnull=True)
-        return sum(item.subtotal for item in items)
+        """Subtotal sin descuentos - solo items ACTIVOS"""
+        items_activos = self.items.filter(deleted_at__isnull=True)
+        return sum((item.subtotal for item in items_activos), Decimal('0.00'))
     
     @property
     def total(self):
-        """Total con descuentos"""
-        # TODO: Aplicar descuentos cuando tengamos el módulo de promociones
+        """Total con descuentos - solo items ACTIVOS"""
+        # Por ahora es igual al subtotal, luego agregaremos descuentos
         return self.subtotal
     
     def limpiar(self):
         """Vaciar el carrito"""
-        self.items.filter(deleted_at__isnull=True).update(deleted_at=models.functions.Now())
+        from django.utils import timezone
+        self.items.filter(deleted_at__isnull=True).update(deleted_at=timezone.now())
 
 
 class ItemCarrito(BaseModel):
@@ -74,7 +84,7 @@ class ItemCarrito(BaseModel):
         db_table = 'item_carrito'
         verbose_name = 'Item de Carrito'
         verbose_name_plural = 'Items de Carrito'
-        unique_together = [['carrito', 'prenda', 'talla']]
+        unique_together = [['carrito', 'prenda', 'talla', 'deleted_at']]
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['carrito', '-created_at']),
@@ -92,7 +102,9 @@ class ItemCarrito(BaseModel):
     @property
     def subtotal(self):
         """Subtotal del item"""
-        return self.precio_unitario * self.cantidad
+        # Keep subtotal as Decimal to avoid mixing Decimal and float elsewhere
+        from decimal import Decimal
+        return (self.precio_unitario * Decimal(self.cantidad))
     
     def verificar_stock(self):
         """Verificar si hay stock disponible"""
@@ -110,3 +122,9 @@ class ItemCarrito(BaseModel):
             return False, f"Solo hay {stock.cantidad} unidades disponibles"
         
         return True, "Stock disponible"
+    
+    def soft_delete(self):
+        """Soft delete del item"""
+        from django.utils import timezone
+        self.deleted_at = timezone.now()
+        self.save(update_fields=['deleted_at'])

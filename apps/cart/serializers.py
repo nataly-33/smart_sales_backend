@@ -7,7 +7,7 @@ from apps.products.models import StockPrenda
 class ItemCarritoSerializer(serializers.ModelSerializer):
     prenda_detalle = PrendaListSerializer(source='prenda', read_only=True)
     talla_detalle = TallaSerializer(source='talla', read_only=True)
-    subtotal = serializers.ReadOnlyField()
+    subtotal = serializers.SerializerMethodField()
     stock_disponible = serializers.SerializerMethodField()
     
     class Meta:
@@ -18,6 +18,9 @@ class ItemCarritoSerializer(serializers.ModelSerializer):
             'created_at'
         ]
         read_only_fields = ['id', 'precio_unitario', 'created_at']
+    
+    def get_subtotal(self, obj):
+        return obj.subtotal
     
     def get_stock_disponible(self, obj):
         stock = StockPrenda.objects.filter(
@@ -51,15 +54,33 @@ class ItemCarritoSerializer(serializers.ModelSerializer):
 
 
 class CarritoSerializer(serializers.ModelSerializer):
-    items = ItemCarritoSerializer(many=True, read_only=True)
-    total_items = serializers.ReadOnlyField()
-    subtotal = serializers.ReadOnlyField()
-    total = serializers.ReadOnlyField()
+    items = serializers.SerializerMethodField()
+    total_items = serializers.SerializerMethodField()
+    cantidad_items = serializers.SerializerMethodField()
+    subtotal = serializers.SerializerMethodField()
+    total = serializers.SerializerMethodField()
     
     class Meta:
         model = Carrito
-        fields = ['id', 'items', 'total_items', 'subtotal', 'total', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        fields = ['id', 'usuario', 'items', 'total_items', 'cantidad_items', 'subtotal', 'total', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'usuario', 'created_at', 'updated_at']
+    
+    def get_items(self, obj):
+        """Obtener solo los items activos (no eliminados) del carrito"""
+        items_activos = obj.items.filter(deleted_at__isnull=True)
+        return ItemCarritoSerializer(items_activos, many=True, context=self.context).data
+    
+    def get_total_items(self, obj):
+        return obj.total_items
+    
+    def get_cantidad_items(self, obj):
+        return obj.cantidad_total_items
+    
+    def get_subtotal(self, obj):
+        return obj.subtotal
+    
+    def get_total(self, obj):
+        return obj.total
 
 
 class AgregarItemCarritoSerializer(serializers.Serializer):
