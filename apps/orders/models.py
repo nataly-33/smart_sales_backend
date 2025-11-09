@@ -273,3 +273,99 @@ class HistorialEstadoPedido(BaseModel):
     
     def __str__(self):
         return f"{self.pedido.numero_pedido}: {self.estado_anterior} → {self.estado_nuevo}"
+
+
+ESTADOS_ENVIO = [
+    ('pendiente', 'Pendiente'),
+    ('preparando', 'Preparando'),
+    ('recogido', 'Recogido'),
+    ('en_transito', 'En tránsito'),
+    ('entregado', 'Entregado'),
+    ('devuelto', 'Devuelto'),
+    ('cancelado', 'Cancelado'),
+]
+
+
+class Envio(BaseModel):
+    """Gestión de envíos de pedidos"""
+    numero_seguimiento = models.CharField(
+        max_length=100, 
+        unique=True, 
+        editable=False, 
+        verbose_name='Número de seguimiento'
+    )
+    
+    pedido = models.OneToOneField(
+        Pedido,
+        on_delete=models.PROTECT,
+        related_name='envio',
+        verbose_name='Pedido'
+    )
+    
+    # Información de envío
+    estado = models.CharField(
+        max_length=50, 
+        choices=ESTADOS_ENVIO, 
+        default='pendiente', 
+        verbose_name='Estado del envío'
+    )
+    
+    # Personal de entrega
+    asignado_a = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        limit_choices_to={'rol__nombre': 'Delivery'},
+        related_name='envios_asignados',
+        verbose_name='Asignado a (Delivery)'
+    )
+    
+    # Fechas
+    fecha_envio = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de envío')
+    fecha_entrega_estimada = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de entrega estimada')
+    fecha_entrega_real = models.DateTimeField(null=True, blank=True, verbose_name='Fecha de entrega real')
+    
+    # Información del transportista
+    empresa_transportista = models.CharField(
+        max_length=100, 
+        blank=True, 
+        verbose_name='Empresa transportista'
+    )
+    costo_envio = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0, 
+        verbose_name='Costo del envío'
+    )
+    
+    # Notas
+    notas = models.TextField(blank=True, verbose_name='Notas')
+    
+    class Meta:
+        db_table = 'envio'
+        verbose_name = 'Envío'
+        verbose_name_plural = 'Envíos'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['pedido', '-created_at']),
+            models.Index(fields=['numero_seguimiento']),
+            models.Index(fields=['estado', '-created_at']),
+            models.Index(fields=['asignado_a', 'estado']),
+        ]
+    
+    def __str__(self):
+        return f"Envío {self.numero_seguimiento} - Pedido {self.pedido.numero_pedido}"
+    
+    def save(self, *args, **kwargs):
+        # Generar número de seguimiento
+        if not self.numero_seguimiento:
+            import random
+            import string
+            from django.utils import timezone
+            
+            timestamp = timezone.now().strftime('%Y%m%d%H%M%S')
+            random_str = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            self.numero_seguimiento = f"SHIP-{timestamp}-{random_str}"
+        
+        super().save(*args, **kwargs)

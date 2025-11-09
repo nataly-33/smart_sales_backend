@@ -11,10 +11,11 @@ from decimal import Decimal
 from django.http import HttpResponse
 from django.views import View
 
-from .models import Pedido, DetallePedido, Pago, MetodoPago, HistorialEstadoPedido
+from .models import Pedido, DetallePedido, Pago, MetodoPago, HistorialEstadoPedido, Envio, ESTADOS_ENVIO
 from .serializers import (
     PedidoListSerializer, PedidoDetailSerializer, MetodoPagoSerializer,
-    CheckoutSerializer, CambiarEstadoPedidoSerializer
+    CheckoutSerializer, CambiarEstadoPedidoSerializer, EnvioListSerializer,
+    EnvioDetailSerializer
 )
 from apps.core.permissions import IsAdminUser, IsEmpleadoOrAdmin
 from apps.cart.models import Carrito
@@ -119,15 +120,6 @@ class PedidoViewSet(viewsets.ModelViewSet):
                 {'error': 'Método de pago no válido'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-        # Verificar saldo si es billetera
-        if metodo_pago_codigo == 'billetera':
-            if usuario.saldo_billetera < total:
-                return Response({
-                    'error': 'Saldo insuficiente en billetera',
-                    'saldo_actual': usuario.saldo_billetera,
-                    'total_requerido': total
-                }, status=status.HTTP_400_BAD_REQUEST)
         
         # Crear pedido en una transacción
         with transaction.atomic():
@@ -378,3 +370,103 @@ class StripeWebhookView(View):
 
         except Pago.DoesNotExist:
             print(f"⚠️ Pago no encontrado para Payment Intent: {payment_intent_id}")
+
+
+class EnvioViewSet(viewsets.ModelViewSet):
+    """CRUD de envíos"""
+    serializer_class = EnvioListSerializer
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    
+    def get_queryset(self):
+        return Envio.objects.filter(deleted_at__isnull=True).order_by('-created_at')
+    
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return EnvioDetailSerializer
+        return EnvioListSerializer
+    
+    def perform_create(self, serializer):
+        """Crear envío para un pedido"""
+        pedido_id = self.request.data.get('pedido_id')
+        
+        try:
+            pedido = Pedido.objects.get(id=pedido_id, deleted_at__isnull=True)
+        except Pedido.DoesNotExist:
+            raise Response({'error': 'Pedido no encontrado'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Verificar que el pedido no tenga ya un envío
+        if Envio.objects.filter(pedido=pedido, deleted_at__isnull=True).exists():
+            raise Response(
+                {'error': 'Este pedido ya tiene un envío asignado'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer.save(pedido=pedido)
+    
+    @action(detail=True, methods=['post'])
+    def cambiar_estado(self, request, pk=None):
+        """Cambiar estado del envío"""
+        envio = self.get_object()
+        
+        nuevo_estado = request.data.get('nuevo_estado')
+        if nuevo_estado not in dict(ESTADOS_ENVIO):
+            return Response(
+                {'error': 'Estado de envío inválido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        envio.estado = nuevo_estado
+        
+        # Actualizar fechas según el estado
+        from django.utils import timezone
+        
+        if nuevo_estado == 'enviado':
+            envio.fecha_envio = timezone.now()
+        elif nuevo_estado == 'entregado':
+            envio.fecha_entrega_real = timezone.now()
+            # Actualizar estado del pedido
+            envio.pedido.cambiar_estado('entregado', request.user, 'Envío entregado')
+        elif nuevo_estado == 'cancelado':
+            envio.pedido.cambiar_estado('cancelado', request.user, 'Envío cancelado')
+        
+        envio.save()
+        
+        serializer = EnvioDetailSerializer(envio)
+        return Response({
+            'message': 'Estado del envío actualizado',
+            'envio': serializer.data
+        })
+    
+    @action(detail=True, methods=['post'])
+    def asignar_delivery(self, request, pk=None):
+        """Asignar un delivery al envío"""
+        envio = self.get_object()
+        
+        delivery_id = request.data.get('delivery_id')
+        if not delivery_id:
+            return Response(
+                {'error': 'delivery_id es requerido'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            from apps.accounts.models import User
+            delivery = User.objects.get(
+                id=delivery_id,
+                rol__nombre='Delivery',
+                deleted_at__isnull=True
+            )
+        except User.DoesNotExist:
+            return Response(
+                {'error': 'Delivery no encontrado'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        envio.asignado_a = delivery
+        envio.save()
+        
+        serializer = EnvioDetailSerializer(envio)
+        return Response({
+            'message': 'Delivery asignado exitosamente',
+            'envio': serializer.data
+        })

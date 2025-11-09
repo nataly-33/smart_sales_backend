@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Pedido, DetallePedido, Pago, MetodoPago, HistorialEstadoPedido
+from .models import Pedido, DetallePedido, Pago, MetodoPago, HistorialEstadoPedido, Envio, ESTADOS_ENVIO
 from apps.products.serializers import PrendaListSerializer, TallaSerializer
 from apps.customers.serializers import DireccionSerializer
 from apps.accounts.serializers import UserSerializer
@@ -125,3 +125,32 @@ class CambiarEstadoPedidoSerializer(serializers.Serializer):
     """Serializer para cambiar estado del pedido"""
     nuevo_estado = serializers.ChoiceField(choices=[estado[0] for estado in ESTADOS_PEDIDO])
     notas = serializers.CharField(required=False, allow_blank=True)
+
+
+class EnvioListSerializer(serializers.ModelSerializer):
+    """Serializer ligero para listados de envíos"""
+    pedido_numero = serializers.CharField(source='pedido.numero_pedido', read_only=True)
+    
+    class Meta:
+        model = Envio
+        fields = [
+            'id', 'numero_seguimiento', 'pedido', 'pedido_numero', 'estado',
+            'fecha_envio', 'fecha_entrega_estimada', 'empresa_transportista',
+            'created_at'
+        ]
+
+
+class EnvioDetailSerializer(serializers.ModelSerializer):
+    """Serializer completo para detalles de envíos"""
+    pedido_detalle = PedidoDetailSerializer(source='pedido', read_only=True)
+    asignado_a_detalle = UserSerializer(source='asignado_a', read_only=True)
+    
+    class Meta:
+        model = Envio
+        fields = [
+            'id', 'numero_seguimiento', 'pedido', 'pedido_detalle', 'estado',
+            'asignado_a', 'asignado_a_detalle', 'fecha_envio',
+            'fecha_entrega_estimada', 'fecha_entrega_real',
+            'empresa_transportista', 'costo_envio', 'notas',
+            'created_at', 'updated_at'
+        ]
