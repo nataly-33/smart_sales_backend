@@ -58,22 +58,22 @@ class TallaViewSet(viewsets.ModelViewSet):
 
 class PrendaViewSet(viewsets.ModelViewSet):
     """CRUD de prendas con filtros avanzados"""
-    queryset = Prenda.objects.filter(deleted_at__isnull=True, activa=True).prefetch_related(
+    queryset = Prenda.objects.filter(deleted_at__isnull=True).prefetch_related(
         'marca', 'categorias', 'tallas_disponibles', 'imagenes', 'stocks'
     )
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['marca', 'categorias', 'color', 'destacada', 'es_novedad']
+    filterset_fields = ['marca', 'categorias', 'color', 'destacada', 'es_novedad', 'activa']
     search_fields = ['nombre', 'descripcion', 'color']
     ordering_fields = ['precio', 'created_at', 'nombre']
     ordering = ['-created_at']
-    
+
     def get_serializer_class(self):
         if self.action == 'list':
             return PrendaListSerializer
         elif self.action in ['create', 'update', 'partial_update']:
             return PrendaCreateUpdateSerializer
         return PrendaDetailSerializer
-    
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve', 'search']:
             return [AllowAny()]
@@ -113,8 +113,27 @@ class PrendaViewSet(viewsets.ModelViewSet):
         return obj
     
     def get_queryset(self):
+        """
+        Personaliza el queryset: empleados/admin ven todos los productos,
+        usuarios públicos solo ven productos activos
+        """
         queryset = super().get_queryset()
-        
+
+        # Si el usuario es empleado/admin, puede ver todos los productos (activos e inactivos)
+        if self.request.user.is_authenticated:
+            user_perms = getattr(self.request.user, 'permisos_usuario', [])
+            is_staff_or_admin = (
+                self.request.user.is_staff or
+                'products.view_prenda' in user_perms or
+                hasattr(self.request.user, 'codigo_empleado')
+            )
+            if not is_staff_or_admin:
+                # Usuario autenticado sin permisos, solo productos activos
+                queryset = queryset.filter(activa=True)
+        else:
+            # Usuarios no autenticados solo ven productos activos
+            queryset = queryset.filter(activa=True)
+
         # Filtro por rango de precio
         precio_min = self.request.query_params.get('precio_min')
         precio_max = self.request.query_params.get('precio_max')
@@ -122,17 +141,17 @@ class PrendaViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(precio__gte=precio_min)
         if precio_max:
             queryset = queryset.filter(precio__lte=precio_max)
-        
+
         # Filtro por talla
         talla = self.request.query_params.get('talla')
         if talla:
             queryset = queryset.filter(tallas_disponibles__id=talla)
-        
+
         # Filtro por disponibilidad
         solo_con_stock = self.request.query_params.get('con_stock')
         if solo_con_stock == 'true':
             queryset = queryset.filter(stocks__cantidad__gt=0).distinct()
-        
+
         return queryset
     
     @action(detail=False, methods=['get'])

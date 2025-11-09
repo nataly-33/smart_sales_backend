@@ -47,7 +47,13 @@ class StockPrendaSerializer(serializers.ModelSerializer):
     class Meta:
         model = StockPrenda
         fields = ['id', 'talla', 'talla_detalle', 'cantidad', 'stock_minimo', 'alerta_stock_bajo']
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'alerta_stock_bajo']
+    
+    def to_representation(self, instance):
+        """Mostrar talla_detalle en respuestas GET"""
+        ret = super().to_representation(instance)
+        ret['talla_detalle'] = TallaSerializer(instance.talla).data
+        return ret
 
 
 class PrendaListSerializer(serializers.ModelSerializer):
@@ -91,37 +97,108 @@ class PrendaDetailSerializer(serializers.ModelSerializer):
 
 
 class PrendaCreateUpdateSerializer(serializers.ModelSerializer):
-    """Serializer para crear/actualizar prendas"""
-    
+    """Serializer para crear/actualizar prendas con stocks por talla"""
+    stocks = serializers.ListField(child=serializers.DictField(), required=False, write_only=True)
+
     class Meta:
         model = Prenda
         fields = [
             'nombre', 'descripcion', 'precio', 'marca', 'categorias',
             'tallas_disponibles', 'color', 'material', 'activa',
-            'destacada', 'es_novedad', 'metadata'
+            'destacada', 'es_novedad', 'metadata', 'stocks'
         ]
+
+    def to_internal_value(self, data):
+        """
+        Parsear el campo stocks si viene como JSON string (desde FormData)
+        """
+        import json
+
+        # Si stocks viene como string JSON (desde FormData), parsearlo
+        if 'stocks' in data and isinstance(data.get('stocks'), str):
+            try:
+                # Crear una copia mutable de data si es un QueryDict
+                if hasattr(data, '_mutable'):
+                    data._mutable = True
+
+                parsed_stocks = json.loads(data['stocks'])
+                data['stocks'] = parsed_stocks
+
+                if hasattr(data, '_mutable'):
+                    data._mutable = False
+            except (json.JSONDecodeError, TypeError) as e:
+                raise serializers.ValidationError({
+                    'stocks': f'El campo stocks debe ser un JSON válido: {str(e)}'
+                })
+
+        return super().to_internal_value(data)
     
     def create(self, validated_data):
         categorias = validated_data.pop('categorias', [])
         tallas = validated_data.pop('tallas_disponibles', [])
+        stocks_data = validated_data.pop('stocks', [])
         
         prenda = Prenda.objects.create(**validated_data)
         prenda.categorias.set(categorias)
         prenda.tallas_disponibles.set(tallas)
+        
+        # Crear stocks por talla si se proporcionan
+        for stock_data in stocks_data:
+            if isinstance(stock_data, dict):
+                talla_id = stock_data.get('talla')
+                cantidad = int(stock_data.get('cantidad', 0))
+                stock_minimo = int(stock_data.get('stock_minimo', 5))
+                
+                if talla_id:
+                    StockPrenda.objects.get_or_create(
+                        prenda=prenda,
+                        talla_id=talla_id,
+                        defaults={'cantidad': cantidad, 'stock_minimo': stock_minimo}
+                    )
         
         return prenda
     
     def update(self, instance, validated_data):
         categorias = validated_data.pop('categorias', None)
         tallas = validated_data.pop('tallas_disponibles', None)
+        stocks_data = validated_data.pop('stocks', None)
         
+        # Actualizar campos simples
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
         
+        # Actualizar relaciones many-to-many
         if categorias is not None:
             instance.categorias.set(categorias)
         if tallas is not None:
             instance.tallas_disponibles.set(tallas)
+        
+        # Actualizar stocks si se proporcionan
+        if stocks_data is not None:
+            # Obtener IDs de tallas en el nuevo stock
+            new_talla_ids = set()
+            
+            for stock_data in stocks_data:
+                if isinstance(stock_data, dict):
+                    talla_id = stock_data.get('talla')
+                    cantidad = int(stock_data.get('cantidad', 0))
+                    stock_minimo = int(stock_data.get('stock_minimo', 5))
+                    
+                    if talla_id:
+                        new_talla_ids.add(talla_id)
+                        stock, created = StockPrenda.objects.get_or_create(
+                            prenda=instance,
+                            talla_id=talla_id,
+                            defaults={'cantidad': cantidad, 'stock_minimo': stock_minimo}
+                        )
+                        
+                        if not created:
+                            stock.cantidad = cantidad
+                            stock.stock_minimo = stock_minimo
+                            stock.save()
+            
+            # Eliminar stocks de tallas que ya no están en el nuevo set
+            instance.stocks.exclude(talla_id__in=new_talla_ids).delete()
         
         return instance
