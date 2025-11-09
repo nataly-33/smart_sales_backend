@@ -37,11 +37,11 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'nombre', 'apellido', 'nombre_completo',
-            'telefono', 'foto_perfil', 'saldo_billetera',
+            'telefono', 'foto_perfil',
             'email_verificado', 'direccion_principal',
             'total_compras', 'total_favoritos', 'created_at'
         ]
-        read_only_fields = ['id', 'email', 'saldo_billetera', 'email_verificado', 'created_at']
+        read_only_fields = ['id', 'email', 'email_verificado', 'created_at']
     
     def get_direccion_principal(self, obj):
         direccion = obj.direcciones.filter(es_principal=True).first()
@@ -68,16 +68,3 @@ class FavoritosSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data['usuario'] = self.context['request'].user
         return super().create(validated_data)
-
-
-class WalletRechargeSerializer(serializers.Serializer):
-    """Serializer para recargar billetera"""
-    monto = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0.01)
-    metodo_pago = serializers.ChoiceField(choices=['tarjeta', 'transferencia'])
-    
-    def validate_monto(self, value):
-        if value <= 0:
-            raise serializers.ValidationError("El monto debe ser mayor a 0")
-        if value > 10000:
-            raise serializers.ValidationError("El monto máximo es 10,000")
-        return value

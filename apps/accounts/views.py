@@ -65,17 +65,10 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(request.user)
         return Response(serializer.data)
     
-    @action(detail=True, methods=['post'])
-    def change_password(self, request, pk=None):
-        """Cambiar contraseña"""
-        user = self.get_object()
-        
-        # Solo el mismo usuario o admin puede cambiar la contraseña
-        if request.user != user and not request.user.tiene_permiso('usuarios.actualizar'):
-            return Response(
-                {'error': 'No tienes permisos para realizar esta acción'},
-                status=status.HTTP_403_FORBIDDEN
-            )
+    @action(detail=False, methods=['post'])
+    def change_password(self, request):
+        """Cambiar contraseña del usuario actual"""
+        user = request.user
         
         serializer = ChangePasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -90,6 +83,9 @@ class UserViewSet(viewsets.ModelViewSet):
         # Cambiar contraseña
         user.set_password(serializer.validated_data['new_password'])
         user.save()
+        
+        # Mantener la sesión activa después de cambiar la contraseña
+        update_session_auth_hash(request, user)
         
         return Response({'message': 'Contraseña actualizada exitosamente'})
     

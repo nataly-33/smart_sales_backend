@@ -7,7 +7,7 @@ from django.db.models import Q
 from .models import Direccion, Favoritos
 from .serializers import (
     DireccionSerializer, CustomerProfileSerializer,
-    FavoritosSerializer, WalletRechargeSerializer
+    FavoritosSerializer
 )
 from apps.core.permissions import IsOwnerOrAdmin
 
@@ -38,32 +38,10 @@ class CustomerProfileViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=['get'])
     def wallet(self, request):
         """Ver saldo de billetera"""
+        # TODO: Implementar cuando se agregue el modelo de Wallet
         return Response({
-            'saldo': request.user.saldo_billetera,
-            'usuario': request.user.nombre_completo
-        })
-    
-    @action(detail=False, methods=['post'])
-    def wallet_recharge(self, request):
-        """Recargar billetera"""
-        serializer = WalletRechargeSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        monto = serializer.validated_data['monto']
-        metodo_pago = serializer.validated_data['metodo_pago']
-        
-        # TODO: Integrar con pasarela de pago real
-        # Por ahora solo sumamos el monto
-        
-        request.user.saldo_billetera += monto
-        request.user.save()
-        
-        return Response({
-            'message': 'Recarga exitosa',
-            'nuevo_saldo': request.user.saldo_billetera,
-            'monto_recargado': monto,
-            'metodo_pago': metodo_pago
-        }, status=status.HTTP_200_OK)
+            'message': 'Funcionalidad de billetera no disponible'
+        }, status=status.HTTP_501_NOT_IMPLEMENTED)
 
 
 class DireccionViewSet(viewsets.ModelViewSet):

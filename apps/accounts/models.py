@@ -77,9 +77,6 @@ class User(AbstractBaseUser, BaseModel):
     # Empleados
     codigo_empleado = models.CharField(max_length=50, blank=True, verbose_name='Código de empleado')
     
-    # Clientes
-    saldo_billetera = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name='Saldo en billetera')
-    
     activo = models.BooleanField(default=True, verbose_name='Activo')
     email_verificado = models.BooleanField(default=False, verbose_name='Email verificado')
     

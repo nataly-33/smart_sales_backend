@@ -131,7 +131,6 @@ def seed_users():
             'apellido': 'Cliente',
             'telefono': '+591 70000003',
             'rol': 'Cliente',
-            'saldo_billetera': Decimal('500.00'),
             'activo': True,
             'email_verificado': True
         },
@@ -163,7 +162,6 @@ def seed_users():
                 'rol': rol,
                 'activo': user_data.get('activo', True),
                 'email_verificado': user_data.get('email_verificado', True),
-                'saldo_billetera': user_data.get('saldo_billetera', Decimal('0.00')),
                 'is_staff': user_data.get('is_staff', False),
                 'is_superuser': user_data.get('is_superuser', False)
             }
