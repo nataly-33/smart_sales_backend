@@ -1,22 +1,3 @@
-#!/usr/bin/env python
-"""
-reset_migrations.py
-
-Recorre el backend buscando carpetas "migrations" y elimina todos los archivos de
-migración (*.py) excepto __init__.py. También limpia __pycache__ dentro de
-esas carpetas. Diseñado para evitar errores de import si se eliminan todas las
-migraciones: se asegurará de que exista un __init__.py vacío.
-
-Uso:
-  python reset_migrations.py [--yes] [--dry-run]
-
-Opciones:
-  --yes    Ejecuta sin pedir confirmación.
-  --dry-run  Muestra qué se eliminaría sin efectuar cambios.
-
-Advertencia: Este script elimina archivos. Revisa el listado antes de ejecutar
-sin --dry-run o sin confirmación.
-"""
 from __future__ import annotations
 
 import argparse

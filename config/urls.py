@@ -23,6 +23,7 @@ urlpatterns = [
     path('api/customers/', include('apps.customers.urls')),
     path('api/cart/', include('apps.cart.urls')),
     path('api/orders/', include('apps.orders.urls')),
+    path('api/', include('apps.reports.urls')),
 ]
 
 # Servir archivos media en desarrollo
