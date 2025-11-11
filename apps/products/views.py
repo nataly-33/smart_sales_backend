@@ -5,11 +5,11 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 
-from .models import Categoria, Marca, Talla, Prenda, StockPrenda, ImagenPrenda
+from .models import Categoria, Marca, Talla, Prenda, StockPrenda, ImagenPrendaURL
 from .serializers import (
     CategoriaSerializer, MarcaSerializer, TallaSerializer,
     PrendaListSerializer, PrendaDetailSerializer, PrendaCreateUpdateSerializer,
-    StockPrendaSerializer, ImagenPrendaSerializer
+    StockPrendaSerializer, ImagenPrendaURLSerializer
 )
 from apps.core.permissions import IsAdminUser, IsEmpleadoOrAdmin
 
@@ -59,7 +59,7 @@ class TallaViewSet(viewsets.ModelViewSet):
 class PrendaViewSet(viewsets.ModelViewSet):
     """CRUD de prendas con filtros avanzados"""
     queryset = Prenda.objects.filter(deleted_at__isnull=True).prefetch_related(
-        'marca', 'categorias', 'tallas_disponibles', 'imagenes', 'stocks'
+        'marca', 'categorias', 'tallas_disponibles', 'imagenes_url', 'stocks'
     )
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['marca', 'categorias', 'color', 'destacada', 'es_novedad', 'activa']
@@ -170,9 +170,9 @@ class PrendaViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def agregar_imagen(self, request, pk=None):
-        """Agregar imagen a una prenda"""
+        """Agregar imagen URL a una prenda"""
         prenda = self.get_object()
-        serializer = ImagenPrendaSerializer(data=request.data)
+        serializer = ImagenPrendaURLSerializer(data=request.data)
         
         if serializer.is_valid():
             serializer.save(prenda=prenda)

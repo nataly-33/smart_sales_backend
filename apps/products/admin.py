@@ -1,11 +1,12 @@
 from django.contrib import admin
-from .models import Categoria, Marca, Talla, Prenda, StockPrenda, ImagenPrenda
+from .models import Categoria, Marca, Talla, Prenda, StockPrenda, ImagenPrendaURL
 
 
-class ImagenPrendaInline(admin.TabularInline):
-    model = ImagenPrenda
+class ImagenPrendaURLInline(admin.TabularInline):
+    """Inline para gestionar imágenes URL de prendas"""
+    model = ImagenPrendaURL
     extra = 1
-    fields = ['imagen', 'es_principal', 'orden', 'alt_text']
+    fields = ['imagen_url', 'es_principal', 'orden', 'alt_text']
 
 
 class StockPrendaInline(admin.TabularInline):
@@ -42,7 +43,7 @@ class PrendaAdmin(admin.ModelAdmin):
     search_fields = ['nombre', 'descripcion', 'color']
     filter_horizontal = ['categorias', 'tallas_disponibles']
     prepopulated_fields = {'slug': ('nombre',)}
-    inlines = [ImagenPrendaInline, StockPrendaInline]
+    inlines = [ImagenPrendaURLInline, StockPrendaInline]
     
     fieldsets = (
         ('Información Básica', {
@@ -73,8 +74,10 @@ class StockPrendaAdmin(admin.ModelAdmin):
     alerta_stock_bajo.short_description = 'Stock bajo'
 
 
-@admin.register(ImagenPrenda)
-class ImagenPrendaAdmin(admin.ModelAdmin):
-    list_display = ['prenda', 'es_principal', 'orden', 'created_at']
+@admin.register(ImagenPrendaURL)
+class ImagenPrendaURLAdmin(admin.ModelAdmin):
+    """Admin para imágenes URL de prendas (S3)"""
+    list_display = ['prenda', 'es_principal', 'orden', 'imagen_url', 'created_at']
     list_filter = ['es_principal']
     search_fields = ['prenda__nombre']
+    readonly_fields = ['imagen_url']

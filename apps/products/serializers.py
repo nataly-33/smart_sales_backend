@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Categoria, Marca, Talla, Prenda, StockPrenda, ImagenPrenda
+from .models import Categoria, Marca, Talla, Prenda, StockPrenda, ImagenPrendaURL
 
 
 class CategoriaSerializer(serializers.ModelSerializer):
@@ -19,7 +19,7 @@ class MarcaSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Marca
-        fields = ['id', 'nombre', 'descripcion', 'logo', 'activa', 'total_prendas', 'created_at']
+        fields = ['id', 'nombre', 'descripcion', 'activa', 'total_prendas', 'created_at']
         read_only_fields = ['id', 'created_at']
     
     def get_total_prendas(self, obj):
@@ -33,11 +33,12 @@ class TallaSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
 
-class ImagenPrendaSerializer(serializers.ModelSerializer):
+class ImagenPrendaURLSerializer(serializers.ModelSerializer):
+    """Serializer para imágenes URL (S3)"""
     class Meta:
-        model = ImagenPrenda
-        fields = ['id', 'imagen', 'es_principal', 'orden', 'alt_text']
-        read_only_fields = ['id']
+        model = ImagenPrendaURL
+        fields = ['id', 'imagen_url', 'es_principal', 'orden', 'alt_text']
+        read_only_fields = ['id', 'imagen_url']
 
 
 class StockPrendaSerializer(serializers.ModelSerializer):
@@ -79,7 +80,7 @@ class PrendaDetailSerializer(serializers.ModelSerializer):
     marca_detalle = MarcaSerializer(source='marca', read_only=True)
     categorias_detalle = CategoriaSerializer(source='categorias', many=True, read_only=True)
     tallas_disponibles_detalle = TallaSerializer(source='tallas_disponibles', many=True, read_only=True)
-    imagenes = ImagenPrendaSerializer(many=True, read_only=True)
+    imagenes_url = ImagenPrendaURLSerializer(many=True, read_only=True)
     stocks = StockPrendaSerializer(many=True, read_only=True)
     stock_total = serializers.ReadOnlyField()
     tiene_stock = serializers.ReadOnlyField()
@@ -90,7 +91,7 @@ class PrendaDetailSerializer(serializers.ModelSerializer):
             'id', 'nombre', 'descripcion', 'precio', 'marca', 'marca_detalle',
             'categorias', 'categorias_detalle', 'tallas_disponibles', 'tallas_disponibles_detalle',
             'color', 'material', 'activa', 'destacada', 'es_novedad',
-            'imagenes', 'stocks', 'stock_total', 'tiene_stock',
+            'imagenes_url', 'stocks', 'stock_total', 'tiene_stock',
             'slug', 'metadata', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'slug', 'created_at', 'updated_at']

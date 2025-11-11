@@ -7,7 +7,7 @@ class Categoria(BaseModel):
     """Categorías de productos (Vestidos, Blusas, Pantalones, etc.)"""
     nombre = models.CharField(max_length=100, unique=True, verbose_name='Nombre')
     descripcion = models.TextField(blank=True, verbose_name='Descripción')
-    imagen = models.ImageField(upload_to='categorias/', null=True, blank=True, verbose_name='Imagen')
+    imagen = models.URLField(null=True, blank=True, verbose_name='URL Imagen S3')
     activa = models.BooleanField(default=True, verbose_name='Activa')
     
     class Meta:
@@ -24,7 +24,6 @@ class Marca(BaseModel):
     """Marcas de ropa"""
     nombre = models.CharField(max_length=100, unique=True, verbose_name='Nombre')
     descripcion = models.TextField(blank=True, verbose_name='Descripción')
-    logo = models.ImageField(upload_to='marcas/', null=True, blank=True, verbose_name='Logo')
     activa = models.BooleanField(default=True, verbose_name='Activa')
     
     class Meta:
@@ -104,13 +103,13 @@ class Prenda(BaseModel):
     
     @property
     def imagen_principal(self):
-        """Retorna la primera imagen o None"""
-        primera = self.imagenes.filter(es_principal=True).first()
+        """Retorna la primera imagen URL o None"""
+        primera = self.imagenes_url.filter(es_principal=True).first()
         if primera:
-            return primera.imagen.url
-        primera_disponible = self.imagenes.first()
+            return primera.imagen_url
+        primera_disponible = self.imagenes_url.first()
         if primera_disponible:
-            return primera_disponible.imagen.url
+            return primera_disponible.imagen_url
         return None
     
     @property
@@ -161,29 +160,33 @@ class StockPrenda(BaseModel):
         self.cantidad += cantidad
         self.save()
 
-
-class ImagenPrenda(BaseModel):
-    """Galería de imágenes para cada prenda"""
-    prenda = models.ForeignKey(Prenda, on_delete=models.CASCADE, related_name='imagenes', verbose_name='Prenda')
-    imagen = models.ImageField(upload_to='productos/', verbose_name='Imagen')
+class ImagenPrendaURL(BaseModel):
+    """Imágenes de prendas almacenadas como URLs (para S3)"""
+    prenda = models.ForeignKey(
+        Prenda,
+        on_delete=models.CASCADE,
+        related_name='imagenes_url',
+        verbose_name='Prenda'
+    )
+    imagen_url = models.URLField(verbose_name='URL de la imagen')
     es_principal = models.BooleanField(default=False, verbose_name='Es principal')
     orden = models.IntegerField(default=0, verbose_name='Orden')
     alt_text = models.CharField(max_length=200, blank=True, verbose_name='Texto alternativo')
     
     class Meta:
-        db_table = 'imagen_prenda'
-        verbose_name = 'Imagen de Prenda'
-        verbose_name_plural = 'Imágenes de Prendas'
+        db_table = 'imagen_prenda_url'
+        verbose_name = 'Imagen de Prenda (URL)'
+        verbose_name_plural = 'Imágenes de Prendas (URL)'
         ordering = ['orden', '-es_principal']
         indexes = [
             models.Index(fields=['prenda', 'orden']),
         ]
     
     def __str__(self):
-        return f"Imagen de {self.prenda.nombre}"
+        return f"Imagen URL de {self.prenda.nombre}"
     
     def save(self, *args, **kwargs):
         # Si es principal, desmarcar las demás
         if self.es_principal:
-            ImagenPrenda.objects.filter(prenda=self.prenda, es_principal=True).update(es_principal=False)
+            ImagenPrendaURL.objects.filter(prenda=self.prenda, es_principal=True).update(es_principal=False)
         super().save(*args, **kwargs)
