@@ -44,6 +44,9 @@ Thumbs.db
 media/reports/*.pdf
 media/reports/*.xlsx
 
-# ML Models
-apps/ai/models_ml/*.pkl
-!apps/ai/models_ml/.gitkeep
+# Ignorar modelos de IA y binarios
+*.pkl
+*.joblib
+models/
+ss_backend/models/
+__pycache__/
