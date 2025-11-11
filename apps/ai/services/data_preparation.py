@@ -25,12 +25,12 @@ class DataPreparationService:
     def __init__(self):
         self.min_records_for_training = 50  # Mínimo de registros para entrenar
     
-    def get_historical_sales_data(self, months_back=12):
+    def get_historical_sales_data(self, months_back=36):
         """
         Extrae datos históricos de ventas de los últimos N meses
         
         Args:
-            months_back (int): Número de meses hacia atrás a considerar
+            months_back (int): Número de meses hacia atrás a considerar (default: 36 = 3 años)
             
         Returns:
             pd.DataFrame: DataFrame con datos de ventas históricas
@@ -78,15 +78,17 @@ class DataPreparationService:
         
         return df
     
-    def prepare_features(self, df):
+    def prepare_features(self, df, months_back=36):
         """
         Prepara features para el modelo de Machine Learning
+        IMPORTANTE: Incluye TODOS los meses (incluso con 0 ventas) para tener dataset completo
         
         Args:
             df (pd.DataFrame): DataFrame con datos crudos
+            months_back (int): Meses hacia atrás para generar el rango completo
             
         Returns:
-            tuple: (X, y) Features y target
+            tuple: (X, y, feature_columns) Features, target y nombres de columnas
         """
         # Agregar por mes, año y categoría
         df_agg = df.groupby(['año', 'mes', 'categoria']).agg({
@@ -98,19 +100,73 @@ class DataPreparationService:
         
         df_agg.columns = ['año', 'mes', 'categoria', 'cantidad_vendida', 'total_ventas', 'precio_promedio', 'num_transacciones']
         
+        # ✅ CORRECCIÓN CRÍTICA: Crear un rango completo de todos los meses
+        # Esto asegura que tengamos 36 meses × 4 categorías = 144 registros
+        fecha_fin = timezone.now()
+        fecha_inicio = fecha_fin - timedelta(days=months_back * 30)
+        
+        # Generar todos los meses en el rango
+        all_months = []
+        current_date = fecha_inicio.replace(day=1)
+        while current_date <= fecha_fin:
+            all_months.append({
+                'año': current_date.year,
+                'mes': current_date.month
+            })
+            # Avanzar al siguiente mes
+            if current_date.month == 12:
+                current_date = current_date.replace(year=current_date.year + 1, month=1)
+            else:
+                current_date = current_date.replace(month=current_date.month + 1)
+        
+        # Crear DataFrame con todas las combinaciones de mes × categoría
+        categorias = ['Blusas', 'Vestidos', 'Jeans', 'Jackets']
+        all_combinations = []
+        for month_data in all_months:
+            for categoria in categorias:
+                all_combinations.append({
+                    'año': month_data['año'],
+                    'mes': month_data['mes'],
+                    'categoria': categoria
+                })
+        
+        df_complete = pd.DataFrame(all_combinations)
+        
+        # Hacer merge con los datos reales (left join para mantener todos los meses)
+        df_merged = df_complete.merge(
+            df_agg, 
+            on=['año', 'mes', 'categoria'], 
+            how='left'
+        )
+        
+        # Rellenar valores NaN con 0 (meses sin ventas)
+        df_merged['cantidad_vendida'] = df_merged['cantidad_vendida'].fillna(0)
+        df_merged['total_ventas'] = df_merged['total_ventas'].fillna(0)
+        df_merged['precio_promedio'] = df_merged['precio_promedio'].fillna(0)
+        df_merged['num_transacciones'] = df_merged['num_transacciones'].fillna(0)
+        
         # Features adicionales
-        df_agg['mes_sin'] = np.sin(2 * np.pi * df_agg['mes'] / 12)
-        df_agg['mes_cos'] = np.cos(2 * np.pi * df_agg['mes'] / 12)
-        df_agg['trimestre'] = (df_agg['mes'] - 1) // 3 + 1
+        df_merged['mes_sin'] = np.sin(2 * np.pi * df_merged['mes'] / 12)
+        df_merged['mes_cos'] = np.cos(2 * np.pi * df_merged['mes'] / 12)
+        df_merged['trimestre'] = (df_merged['mes'] - 1) // 3 + 1
         
         # One-hot encoding para categoría
-        df_encoded = pd.get_dummies(df_agg, columns=['categoria'], prefix='cat')
+        df_encoded = pd.get_dummies(df_merged, columns=['categoria'], prefix='cat')
         
         # Separar features (X) y target (y)
-        feature_columns = [col for col in df_encoded.columns if col not in ['cantidad_vendida', 'total_ventas']]
-        
+        feature_columns = [
+            'año', 'mes', 'mes_sin', 'mes_cos', 'trimestre',
+            'cat_Blusas', 'cat_Vestidos', 'cat_Jeans', 'cat_Jackets'
+        ]
+
+        for col in feature_columns:
+            if col not in df_encoded:
+                df_encoded[col] = 0
+
         X = df_encoded[feature_columns]
         y = df_encoded['cantidad_vendida']  # Predecimos cantidad vendida
+        
+        print(f"📊 Dataset completo: {len(X)} registros ({len(all_months)} meses × {len(categorias)} categorías)")
         
         return X, y, feature_columns
     
@@ -128,7 +184,7 @@ class DataPreparationService:
         """
         np.random.seed(42)
         
-        categorias = ['Vestidos', 'Blusas', 'Pantalones', 'Faldas']
+        categorias = ['Blusas', 'Vestidos', 'Jeans', 'Jackets']
         marcas = ['Zara', 'H&M', 'Mango', 'Pull&Bear', 'Bershka']
         
         synthetic_data = []
@@ -156,10 +212,10 @@ class DataPreparationService:
             
             # Precio base según categoría
             precios_base = {
-                'Vestidos': 89.99,
                 'Blusas': 45.99,
-                'Pantalones': 65.99,
-                'Faldas': 55.99
+                'Vestidos': 89.99,
+                'Jeans': 65.99,
+                'Jackets': 120.00
             }
             
             precio_base = precios_base.get(categoria, 60.0)

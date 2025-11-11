@@ -34,11 +34,12 @@ class ModelTrainingService:
         # Crear directorio si no existe
         os.makedirs(self.models_dir, exist_ok=True)
     
-    def train_model(self, n_estimators=100, max_depth=10, random_state=42, test_size=0.2):
+    def train_model(self, months_back=36, n_estimators=100, max_depth=10, random_state=42, test_size=0.2):
         """
         Entrena un nuevo modelo Random Forest
         
         Args:
+            months_back (int): Meses de datos históricos a usar (36 = 3 años, 24 = 2 años)
             n_estimators (int): Número de árboles en el bosque
             max_depth (int): Profundidad máxima de los árboles
             random_state (int): Semilla para reproducibilidad
@@ -52,13 +53,13 @@ class ModelTrainingService:
         print("=" * 60)
         
         # 1. Obtener datos históricos
-        print("\n📊 Paso 1: Obteniendo datos históricos...")
-        df = self.data_service.get_historical_sales_data(months_back=12)
+        print(f"\n📊 Paso 1: Obteniendo datos históricos ({months_back} meses = {months_back/12:.1f} años)...")
+        df = self.data_service.get_historical_sales_data(months_back=months_back)
         print(f"✅ {len(df)} registros obtenidos")
         
         # 2. Preparar features
         print("\n🔧 Paso 2: Preparando features...")
-        X, y, feature_columns = self.data_service.prepare_features(df)
+        X, y, feature_columns = self.data_service.prepare_features(df, months_back=months_back)
         print(f"✅ {len(feature_columns)} features creadas")
         print(f"   Samples: {len(X)}, Features: {X.shape[1]}")
         
@@ -136,7 +137,8 @@ class ModelTrainingService:
             'model': model,
             'feature_columns': feature_columns,
             'version': version,
-            'trained_at': datetime.now().isoformat()
+            'trained_at': datetime.now().isoformat(),
+            'months_back': months_back
         }, model_path)
         
         print(f"✅ Modelo guardado en: {model_path}")
@@ -146,7 +148,7 @@ class ModelTrainingService:
         ml_model = MLModel.objects.create(
             nombre='Predictor de Ventas',
             version=version,
-            descripcion=f'Random Forest Regressor entrenado con {len(X_train)} muestras',
+            descripcion=f'Random Forest Regressor entrenado con {len(X_train)} muestras ({months_back} meses de datos)',
             archivo_modelo=model_path,
             mae=mae_test,
             mse=mse_test,
@@ -158,7 +160,8 @@ class ModelTrainingService:
                 'n_estimators': n_estimators,
                 'max_depth': max_depth,
                 'random_state': random_state,
-                'test_size': test_size
+                'test_size': test_size,
+                'months_back': months_back
             },
             activo=True  # Activar automáticamente el nuevo modelo
         )
@@ -176,6 +179,7 @@ class ModelTrainingService:
             'model_id': ml_model.id,
             'version': version,
             'model_path': model_path,
+            'months_back': months_back,
             'metrics': {
                 'train': {
                     'mae': mae_train,

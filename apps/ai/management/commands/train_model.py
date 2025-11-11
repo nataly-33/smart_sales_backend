@@ -3,7 +3,8 @@ Comando de Django para entrenar el modelo de predicción de ventas
 
 Uso:
     python manage.py train_model
-    python manage.py train_model --estimators 200 --depth 15
+    python manage.py train_model --months 24  # 2 años de datos
+    python manage.py train_model --months 36 --estimators 200 --depth 15  # 3 años con más árboles
 """
 
 from django.core.management.base import BaseCommand
@@ -14,6 +15,13 @@ class Command(BaseCommand):
     help = 'Entrena el modelo de predicción de ventas con Random Forest'
     
     def add_arguments(self, parser):
+        parser.add_argument(
+            '--months',
+            type=int,
+            default=36,
+            help='Meses de datos históricos a usar (36 = 3 años, 24 = 2 años, etc.)'
+        )
+        
         parser.add_argument(
             '--estimators',
             type=int,
@@ -41,11 +49,13 @@ class Command(BaseCommand):
         self.stdout.write(self.style.WARNING('='*60 + '\n'))
         
         # Obtener parámetros
+        months_back = options['months']
         n_estimators = options['estimators']
         max_depth = options['depth']
         test_size = options['test_size']
         
         self.stdout.write(f"⚙️  Parámetros:")
+        self.stdout.write(f"   - Meses de datos: {months_back} ({months_back/12:.1f} años)")
         self.stdout.write(f"   - N° de árboles: {n_estimators}")
         self.stdout.write(f"   - Profundidad máxima: {max_depth}")
         self.stdout.write(f"   - Test size: {test_size}")
@@ -56,6 +66,7 @@ class Command(BaseCommand):
             training_service = ModelTrainingService()
             
             result = training_service.train_model(
+                months_back=months_back,
                 n_estimators=n_estimators,
                 max_depth=max_depth,
                 test_size=test_size
@@ -67,6 +78,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS(f"🏷️  Versión: {result['version']}"))
             self.stdout.write(self.style.SUCCESS(f"📁 Guardado en: {result['model_path']}"))
             self.stdout.write(self.style.SUCCESS(f"📊 Muestras de entrenamiento: {result['num_samples']}"))
+            self.stdout.write(self.style.SUCCESS(f"🗓️  Meses de datos: {result['months_back']}"))
             
             test_metrics = result['metrics']['test']
             self.stdout.write(self.style.SUCCESS(f"\n📈 Métricas (Test Set):"))

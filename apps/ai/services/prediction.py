@@ -130,13 +130,13 @@ class PredictionService:
         
         return predictions
     
-    def get_sales_forecast_dashboard(self, months_back=6, months_forward=3):
+    def get_sales_forecast_dashboard(self, months_back=36, months_forward=3):
         """
         Genera datos completos para el dashboard de predicción
         
         Args:
-            months_back (int): Meses históricos a mostrar
-            months_forward (int): Meses futuros a predecir
+            months_back (int): Meses históricos a mostrar (default: 36 = 3 años)
+            months_forward (int): Meses futuros a predecir (default: 3 meses)
             
         Returns:
             dict: Datos para el dashboard
@@ -192,8 +192,6 @@ class PredictionService:
             'mes_sin': np.sin(2 * np.pi * target_date.month / 12),
             'mes_cos': np.cos(2 * np.pi * target_date.month / 12),
             'trimestre': (target_date.month - 1) // 3 + 1,
-            'precio_promedio': 65.0,  # Valor promedio estimado
-            'num_transacciones': 10  # Valor estimado
         }
         
         # One-hot encoding para categorías
