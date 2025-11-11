@@ -251,17 +251,32 @@ def seed_usuarios_principales():
 
 
 def seed_clientes(cantidad=500):
-    """Crear clientes con contraseña fija Cliente2024!"""
+    """Crear clientes con contraseña fija Cliente2024! y fechas distribuidas"""
     print_header(f"👥 CREANDO {cantidad} CLIENTES")
     
     rol_cliente = Role.objects.get(nombre='Cliente')
     clientes = []
+    
+    # Rango de fechas: enero 2024 hasta hoy
+    fecha_inicio = datetime(2024, 1, 1)
+    fecha_fin = datetime.now()
     
     for i in range(cantidad):
         if (i + 1) % 50 == 0:
             print_progress(i + 1, cantidad, f"Creando clientes...")
         
         email = f"cliente_{i+1}@example.com"
+        
+        # Generar fecha aleatoria de registro
+        dias_diferencia = (fecha_fin - fecha_inicio).days
+        dias_random = random.randint(0, dias_diferencia)
+        fecha_registro = fecha_inicio + timedelta(days=dias_random)
+        fecha_registro = fecha_registro.replace(
+            hour=random.randint(0, 23),
+            minute=random.randint(0, 59),
+            second=random.randint(0, 59)
+        )
+        
         user, created = User.objects.get_or_create(
             email=email,
             defaults={
@@ -271,6 +286,8 @@ def seed_clientes(cantidad=500):
                 'activo': True,
                 'email_verificado': True,
                 'telefono': f'+591 {random.randint(60000000, 79999999)}',
+                'created_at': fecha_registro,
+                'updated_at': fecha_registro + timedelta(hours=random.randint(0, 24))
             }
         )
         # SIEMPRE establecer contraseña Cliente2024! (creado o existente)
@@ -367,12 +384,16 @@ def seed_marcas():
 # ============= BLUSAS CON 40% DESTACADAS Y 30% NOVEDADES =============
 
 def seed_blusas(cantidad=2500):
-    """Crear 2500 blusas desde S3 (40% destacadas, 30% novedades)"""
+    """Crear 2500 blusas desde S3 (40% destacadas, 30% novedades, fechas distribuidas, nombres sin color)"""
     print_header(f"👗 CREANDO {cantidad} BLUSAS")
     
     categoria_blusas = Categoria.objects.get(nombre='Blusas')
     marcas_list = list(Marca.objects.all())
     tallas_list = list(Talla.objects.all())
+    
+    # Rango de fechas: enero 2024 hasta hoy
+    fecha_inicio = datetime(2024, 1, 1)
+    fecha_fin = datetime.now()
     
     blusas = []
     
@@ -391,9 +412,10 @@ def seed_blusas(cantidad=2500):
         es_destacada = random.random() < 0.40
         es_novedad = random.random() < 0.30
         
-        nombre = f"{tipo_blusa} {color}"
+        # NOMBRE SIN COLOR (solo tipo de blusa)
+        nombre = tipo_blusa
         
-        # Generar descripción realista
+        # Generar descripción realista con color en descripción
         descripciones = [
             f"Hermosa {tipo_blusa.lower()} en color {color.lower()}, elaborada en {tela.lower()}. Perfecta para cualquier ocasión, cómoda y elegante.",
             f"Blusa de alta calidad de {marca.nombre} en {color.lower()}, confeccionada con {tela.lower()}. Ideal para el día a día o para ocasiones especiales.",
@@ -402,6 +424,16 @@ def seed_blusas(cantidad=2500):
             f"Diseño exclusivo en {color.lower()} confeccionado en {tela.lower()}. {tipo_blusa} que combina elegancia y comodidad.",
         ]
         descripcion = random.choice(descripciones)
+        
+        # Generar fecha aleatoria de creación
+        dias_diferencia = (fecha_fin - fecha_inicio).days
+        dias_random = random.randint(0, dias_diferencia)
+        fecha_creacion = fecha_inicio + timedelta(days=dias_random)
+        fecha_creacion = fecha_creacion.replace(
+            hour=random.randint(0, 23),
+            minute=random.randint(0, 59),
+            second=random.randint(0, 59)
+        )
         
         # Crear blusa (sin get_or_create para evitar duplicados por nombre)
         blusa = Prenda.objects.create(
@@ -413,7 +445,9 @@ def seed_blusas(cantidad=2500):
             material=tela,
             activa=True,
             destacada=es_destacada,
-            es_novedad=es_novedad
+            es_novedad=es_novedad,
+            created_at=fecha_creacion,
+            updated_at=fecha_creacion + timedelta(hours=random.randint(0, 24))
         )
         
         blusa.categorias.add(categoria_blusas)
@@ -542,16 +576,60 @@ def seed_metodos_pago():
     return MetodoPago.objects.all()
 
 
-# ============= PEDIDOS =============
+# ============= PEDIDOS CON FECHAS DISTRIBUIDAS Y NOTAS REALISTAS =============
+
+NOTAS_PLANTILLAS = [
+    "Por favor, entregar antes de las 18:00",
+    "Dejar con el portero si no estoy",
+    "Tocar el timbre dos veces",
+    "Llamar antes de entregar",
+    "Es un regalo, por favor envolver con cuidado",
+    "Entregar en la oficina, segundo piso",
+    "Prefiero entrega en horario de mañana",
+    "Si no hay nadie, dejar en recepción",
+    "Envío urgente, favor priorizar",
+    "Verificar tallas antes de enviar",
+    "Incluir factura en el paquete",
+    "Empacar por separado cada prenda",
+    "Notificar cuando esté en camino",
+    "Entregar solo en manos del destinatario",
+    "Es para un evento el fin de semana",
+]
+
+
+def generar_nota_realista():
+    """Genera una nota de cliente realista"""
+    # 30% sin nota
+    if random.random() < 0.3:
+        return ""
+    
+    # 70% con nota
+    if random.random() < 0.7:
+        return random.choice(NOTAS_PLANTILLAS)
+    else:
+        # Generar nota personalizada con Faker
+        opciones = [
+            f"Entregar en {fake.street_address()}",
+            f"Contactar al {fake.phone_number()} antes de llegar",
+            f"Buzón en la entrada, dejar ahí si no respondo",
+            f"Entrega para {fake.name()}, departamento {random.randint(101, 605)}",
+            f"Horario preferido: {random.randint(9, 18)}:00-{random.randint(9, 18)}:00",
+        ]
+        return random.choice(opciones)
+
 
 def seed_pedidos(clientes, blusas, cantidad_pedidos=1500):
-    """Crear 1500+ pedidos"""
+    """Crear 1500+ pedidos con fechas distribuidas (2024-2025) y notas realistas"""
     print_header(f"📦 CREANDO {cantidad_pedidos} PEDIDOS")
     
     metodos_pago = list(MetodoPago.objects.all())
-    tallas = list(Talla.objects.all())  # Obtener todas las tallas disponibles
+    tallas = list(Talla.objects.all())
     estados_pedido = ['pendiente', 'confirmado', 'enviado', 'entregado', 'cancelado']
     estados_pago = ['pendiente', 'completado', 'fallido']
+    
+    # Rango de fechas: enero 2024 hasta hoy
+    fecha_inicio = datetime(2024, 1, 1)
+    fecha_fin = datetime.now()
     
     pedidos = []
     
@@ -565,18 +643,29 @@ def seed_pedidos(clientes, blusas, cantidad_pedidos=1500):
         if not direccion:
             continue
         
-        # Fecha aleatoria en los últimos 90 días
-        dias_atras = random.randint(0, 90)
-        fecha_pedido = datetime.now() - timedelta(days=dias_atras)
+        # Generar fecha aleatoria de pedido
+        dias_diferencia = (fecha_fin - fecha_inicio).days
+        dias_random = random.randint(0, dias_diferencia)
+        fecha_pedido = fecha_inicio + timedelta(days=dias_random)
+        fecha_pedido = fecha_pedido.replace(
+            hour=random.randint(0, 23),
+            minute=random.randint(0, 59),
+            second=random.randint(0, 59)
+        )
+        
+        # Generar nota realista
+        nota_cliente = generar_nota_realista()
         
         # Crear pedido con campos correctos del modelo
         pedido = Pedido.objects.create(
             usuario=cliente,
             direccion_envio=direccion,
             estado=random.choice(estados_pedido),
-            notas_cliente=fake.sentence() if random.choice([True, False]) else "",
-            subtotal=Decimal('0'),  # Se calculará después
-            total=Decimal('0')  # Se calculará después
+            notas_cliente=nota_cliente,
+            subtotal=Decimal('0'),
+            total=Decimal('0'),
+            created_at=fecha_pedido,
+            updated_at=fecha_pedido + timedelta(hours=random.randint(1, 48))
         )
         
         # Agregar 1-5 items
@@ -592,7 +681,7 @@ def seed_pedidos(clientes, blusas, cantidad_pedidos=1500):
             DetallePedido.objects.create(
                 pedido=pedido,
                 prenda=prenda,
-                talla=random.choice(tallas),  # Asignar talla aleatoria
+                talla=random.choice(tallas),
                 cantidad=cantidad,
                 precio_unitario=prenda.precio,
                 subtotal=subtotal
@@ -623,13 +712,66 @@ def seed_pedidos(clientes, blusas, cantidad_pedidos=1500):
             metodo_pago=metodo,
             monto=total_pedido,
             estado=estado_pago,
-            transaction_id=f"TRX-{datetime.now().timestamp()}-{i}"
+            transaction_id=f"TRX-{fecha_pedido.timestamp()}-{i}"
         )
         
         pedidos.append(pedido)
     
     print(f"{Colors.OK}✅ {len(pedidos)} pedidos creados{Colors.END}")
     return pedidos
+
+
+# ============= CARRITOS PARA CLIENTES 1-20 =============
+
+def seed_carritos(clientes, blusas):
+    """Llenar carritos de clientes 1-20"""
+    print_header("🛒 LLENANDO CARRITOS DE CLIENTES 1-20")
+    
+    tallas = list(Talla.objects.all())
+    carritos_creados = 0
+    items_creados = 0
+    
+    # Primeros 20 clientes
+    clientes_con_carrito = clientes[:20]
+    
+    for idx, cliente in enumerate(clientes_con_carrito, start=1):
+        # Obtener o crear carrito
+        carrito, created = Carrito.objects.get_or_create(
+            usuario=cliente,
+            defaults={'activo': True}
+        )
+        
+        if created:
+            carritos_creados += 1
+        else:
+            # Limpiar items existentes
+            ItemCarrito.objects.filter(carrito=carrito).delete()
+        
+        # Agregar 2-8 items al carrito
+        num_items = random.randint(2, 8)
+        prendas_seleccionadas = random.sample(blusas, min(num_items, len(blusas)))
+        
+        for prenda in prendas_seleccionadas:
+            talla = random.choice(tallas)
+            cantidad = random.randint(1, 3)
+            
+            ItemCarrito.objects.create(
+                carrito=carrito,
+                prenda=prenda,
+                talla=talla,
+                cantidad=cantidad,
+                precio_unitario=prenda.precio
+            )
+            items_creados += 1
+        
+        # Calcular total del carrito
+        items = ItemCarrito.objects.filter(carrito=carrito)
+        total = sum([item.precio_unitario * item.cantidad for item in items])
+        carrito.total = total
+        carrito.save()
+    
+    print(f"{Colors.OK}✅ {carritos_creados} carritos llenos para primeros 20 clientes{Colors.END}")
+    print(f"{Colors.OK}✅ {items_creados} items agregados en total{Colors.END}")
 
 
 # ============= MAIN =============
@@ -673,6 +815,9 @@ def seed_all():
         # 9. Pedidos
         seed_pedidos(clientes, blusas, cantidad_pedidos=1500)
         
+        # 10. Carritos para primeros 20 clientes
+        seed_carritos(clientes, blusas)
+        
         # Resumen final
         print_header("✅ SEEDER COMPLETADO")
         
@@ -680,6 +825,7 @@ def seed_all():
         from apps.products.models import Prenda, Categoria, Marca, Talla, StockPrenda
         from apps.customers.models import Direccion, Favoritos
         from apps.orders.models import Pedido, MetodoPago
+        from apps.cart.models import Carrito
         
         print(f"\n{Colors.BOLD}📊 ESTADÍSTICAS:{Colors.END}")
         print(f"  • Usuarios: {User.objects.count()} (1 admin, 2 empleados, {User.objects.filter(rol__nombre='Cliente').count()} clientes)")
@@ -693,10 +839,12 @@ def seed_all():
         print(f"  • Favoritos: {Favoritos.objects.count()}")
         print(f"  • Métodos de Pago: {MetodoPago.objects.count()}")
         print(f"  • Pedidos: {Pedido.objects.count()}")
+        print(f"  • Carritos activos: {Carrito.objects.filter(activo=True).count()}")
         
         print(f"\n{Colors.BOLD}📋 CREDENCIALES:{Colors.END}")
         print(f"  • Admin: admin@smartsales365.com / Admin2024!")
         print(f"  • Empleado: empleado1@smartsales365.com / Empleado2024!")
+        print(f"  • Cliente (1-20): cliente_1@example.com hasta cliente_20@example.com / Cliente2024!")
         
         print(f"\n{Colors.OK}✨ Todo listo para usar SmartSales365{Colors.END}\n")
         
