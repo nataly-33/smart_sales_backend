@@ -290,3 +290,165 @@ class AnalyticsService:
             } if top_customer else None,
             'average_order_value': float(avg_order_value),
         }
+
+    @staticmethod
+    def get_yearly_comparison():
+        """
+        Obtener comparativa detallada 2024 vs 2025.
+
+        Returns:
+            dict: Diccionario con comparativas por año
+        """
+        from apps.orders.models import Pedido
+        from apps.accounts.models import User
+        from apps.products.models import Prenda
+
+        # Fechas de cada año
+        year_2024_start = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        year_2024_end = datetime(2024, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+        year_2025_start = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        year_2025_end = datetime(2025, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+
+        # VENTAS 2024 vs 2025
+        ventas_2024 = Pedido.objects.filter(
+            created_at__gte=year_2024_start,
+            created_at__lte=year_2024_end
+        )
+        ventas_2025 = Pedido.objects.filter(
+            created_at__gte=year_2025_start,
+            created_at__lte=year_2025_end
+        )
+
+        total_ventas_2024 = ventas_2024.aggregate(total=Sum('total'))['total'] or 0
+        total_ventas_2025 = ventas_2025.aggregate(total=Sum('total'))['total'] or 0
+        pedidos_2024 = ventas_2024.count()
+        pedidos_2025 = ventas_2025.count()
+
+        # Calcular cambio porcentual en ventas
+        if total_ventas_2024 > 0:
+            cambio_ventas = ((total_ventas_2025 - total_ventas_2024) / total_ventas_2024) * 100
+        else:
+            cambio_ventas = 100 if total_ventas_2025 > 0 else 0
+
+        # Calcular cambio porcentual en pedidos
+        if pedidos_2024 > 0:
+            cambio_pedidos = ((pedidos_2025 - pedidos_2024) / pedidos_2024) * 100
+        else:
+            cambio_pedidos = 100 if pedidos_2025 > 0 else 0
+
+        # CLIENTES 2024 vs 2025
+        clientes_2024 = User.objects.filter(
+            rol__nombre='Cliente',
+            created_at__gte=year_2024_start,
+            created_at__lte=year_2024_end
+        ).count()
+        clientes_2025 = User.objects.filter(
+            rol__nombre='Cliente',
+            created_at__gte=year_2025_start,
+            created_at__lte=year_2025_end
+        ).count()
+
+        if clientes_2024 > 0:
+            cambio_clientes = ((clientes_2025 - clientes_2024) / clientes_2024) * 100
+        else:
+            cambio_clientes = 100 if clientes_2025 > 0 else 0
+
+        # PRODUCTOS 2024 vs 2025
+        productos_2024 = Prenda.objects.filter(
+            created_at__gte=year_2024_start,
+            created_at__lte=year_2024_end
+        ).count()
+        productos_2025 = Prenda.objects.filter(
+            created_at__gte=year_2025_start,
+            created_at__lte=year_2025_end
+        ).count()
+
+        if productos_2024 > 0:
+            cambio_productos = ((productos_2025 - productos_2024) / productos_2024) * 100
+        else:
+            cambio_productos = 100 if productos_2025 > 0 else 0
+
+        # TICKET PROMEDIO 2024 vs 2025
+        ticket_promedio_2024 = ventas_2024.aggregate(avg=Avg('total'))['avg'] or 0
+        ticket_promedio_2025 = ventas_2025.aggregate(avg=Avg('total'))['avg'] or 0
+
+        if ticket_promedio_2024 > 0:
+            cambio_ticket = ((ticket_promedio_2025 - ticket_promedio_2024) / ticket_promedio_2024) * 100
+        else:
+            cambio_ticket = 100 if ticket_promedio_2025 > 0 else 0
+
+        # VENTAS POR MES en ambos años
+        ventas_por_mes_2024 = []
+        ventas_por_mes_2025 = []
+        meses_nombres = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+        for mes in range(1, 13):
+            # 2024
+            mes_start_2024 = datetime(2024, mes, 1, tzinfo=timezone.utc)
+            _, last_day = monthrange(2024, mes)
+            mes_end_2024 = datetime(2024, mes, last_day, 23, 59, 59, tzinfo=timezone.utc)
+
+            ventas_mes_2024 = Pedido.objects.filter(
+                created_at__gte=mes_start_2024,
+                created_at__lte=mes_end_2024
+            ).aggregate(total=Sum('total'))['total'] or 0
+
+            ventas_por_mes_2024.append({
+                'mes': meses_nombres[mes - 1],
+                'total': float(ventas_mes_2024),
+                'pedidos': Pedido.objects.filter(
+                    created_at__gte=mes_start_2024,
+                    created_at__lte=mes_end_2024
+                ).count()
+            })
+
+            # 2025
+            mes_start_2025 = datetime(2025, mes, 1, tzinfo=timezone.utc)
+            _, last_day_2025 = monthrange(2025, mes)
+            mes_end_2025 = datetime(2025, mes, last_day_2025, 23, 59, 59, tzinfo=timezone.utc)
+
+            ventas_mes_2025 = Pedido.objects.filter(
+                created_at__gte=mes_start_2025,
+                created_at__lte=mes_end_2025
+            ).aggregate(total=Sum('total'))['total'] or 0
+
+            ventas_por_mes_2025.append({
+                'mes': meses_nombres[mes - 1],
+                'total': float(ventas_mes_2025),
+                'pedidos': Pedido.objects.filter(
+                    created_at__gte=mes_start_2025,
+                    created_at__lte=mes_end_2025
+                ).count()
+            })
+
+        return {
+            'year_2024': {
+                'total_ventas': float(total_ventas_2024),
+                'total_pedidos': pedidos_2024,
+                'nuevos_clientes': clientes_2024,
+                'nuevos_productos': productos_2024,
+                'ticket_promedio': float(ticket_promedio_2024),
+                'ventas_por_mes': ventas_por_mes_2024
+            },
+            'year_2025': {
+                'total_ventas': float(total_ventas_2025),
+                'total_pedidos': pedidos_2025,
+                'nuevos_clientes': clientes_2025,
+                'nuevos_productos': productos_2025,
+                'ticket_promedio': float(ticket_promedio_2025),
+                'ventas_por_mes': ventas_por_mes_2025
+            },
+            'comparison': {
+                'cambio_ventas_porcentaje': round(cambio_ventas, 2),
+                'cambio_ventas_absoluto': float(total_ventas_2025 - total_ventas_2024),
+                'cambio_pedidos_porcentaje': round(cambio_pedidos, 2),
+                'cambio_pedidos_absoluto': pedidos_2025 - pedidos_2024,
+                'cambio_clientes_porcentaje': round(cambio_clientes, 2),
+                'cambio_clientes_absoluto': clientes_2025 - clientes_2024,
+                'cambio_productos_porcentaje': round(cambio_productos, 2),
+                'cambio_productos_absoluto': productos_2025 - productos_2024,
+                'cambio_ticket_porcentaje': round(cambio_ticket, 2),
+                'cambio_ticket_absoluto': float(ticket_promedio_2025 - ticket_promedio_2024)
+            }
+        }
+

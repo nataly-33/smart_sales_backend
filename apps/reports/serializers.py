@@ -12,6 +12,12 @@ class GenerateReportSerializer(serializers.Serializer):
         help_text="Comando en lenguaje natural para generar el reporte. "
                   "Ejemplo: 'Reporte de ventas de septiembre en PDF'"
     )
+    format = serializers.ChoiceField(
+        choices=['pdf', 'excel', 'csv'],
+        required=False,
+        allow_null=True,
+        help_text="Formato del reporte (sobreescribe el formato mencionado en el prompt)"
+    )
 
     def validate_prompt(self, value):
         """Validar que el prompt no esté vacío"""

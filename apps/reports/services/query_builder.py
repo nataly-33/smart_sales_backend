@@ -156,9 +156,14 @@ class QueryBuilder:
                 'items': pedido.detalles.count()
             } for pedido in queryset.select_related('usuario')]
 
+        # Manejar period None correctamente
+        period_label = 'Todo el tiempo'
+        if config.get('period'):
+            period_label = config['period'].get('label', 'Todo el tiempo')
+        
         metadata = {
             'total_records': len(data),
-            'period': config.get('period', {}).get('label', 'Todo el tiempo'),
+            'period': period_label,
             'filters_applied': config.get('filters', {}),
             'grouped_by': config.get('group_by', [])
         }
@@ -201,7 +206,7 @@ class QueryBuilder:
         else:
             # Lista de productos
             queryset = queryset.annotate(
-                stock_total=Sum('stocks__cantidad')
+                stock_cantidad=Sum('stocks__cantidad')
             ).select_related('marca')
 
             if config.get('limit'):
@@ -211,7 +216,7 @@ class QueryBuilder:
                 'nombre': prenda.nombre,
                 'marca': prenda.marca.nombre,
                 'precio': float(prenda.precio),
-                'stock_total': prenda.stock_total or 0,
+                'stock_total': prenda.stock_cantidad or 0,
                 'categorias': ', '.join([cat.nombre for cat in prenda.categorias.all()]),
                 'activa': prenda.activa
             } for prenda in queryset.prefetch_related('categorias')]
@@ -261,9 +266,14 @@ class QueryBuilder:
             'total_gastado': float(user.total_gastado or 0)
         } for user in queryset]
 
+        # Manejar period None correctamente
+        period_label = 'Todo el tiempo'
+        if config.get('period'):
+            period_label = config['period'].get('label', 'Todo el tiempo')
+        
         metadata = {
             'total_records': len(data),
-            'period': config.get('period', {}).get('label', 'Todo el tiempo')
+            'period': period_label
         }
 
         return {

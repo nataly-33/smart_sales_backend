@@ -34,7 +34,8 @@ class ReportGeneratorService:
         cls,
         prompt: str,
         user_name: str = "Sistema",
-        organization_name: str = "SmartSales365"
+        organization_name: str = "SmartSales365",
+        format_override: str = None
     ) -> Tuple[bytes, str, str]:
         """
         Generar un reporte a partir de un prompt en lenguaje natural.
@@ -43,6 +44,7 @@ class ReportGeneratorService:
             prompt: Comando en lenguaje natural
             user_name: Nombre del usuario que genera el reporte
             organization_name: Nombre de la organización
+            format_override: Formato explícito del select (tiene prioridad sobre el prompt)
 
         Returns:
             tuple: (contenido_archivo, nombre_archivo, mime_type)
@@ -54,6 +56,13 @@ class ReportGeneratorService:
             # 1. Parsear el prompt
             logger.info(f"Generando reporte desde prompt: {prompt}")
             config = PromptParser.parse(prompt)
+            
+            # Si viene format_override desde el frontend, tiene prioridad
+            if format_override:
+                logger.info(f"Formato del frontend tiene prioridad: {format_override} (prompt decía: {config['format']})")
+                config['format'] = format_override
+            else:
+                logger.info(f"Formato detectado en el prompt: {config['format']}")
 
             # 2. Construir query y obtener datos
             result = QueryBuilder.build(config)

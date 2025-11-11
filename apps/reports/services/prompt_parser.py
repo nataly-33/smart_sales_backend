@@ -46,21 +46,42 @@ class PromptParser:
         'hoy': 'today',
         'ayer': 'yesterday',
         'esta semana': 'this_week',
-        'semana': 'this_week',
         'semana actual': 'this_week',
+        'semana pasada': 'last_week',
+        'anterior semana': 'last_week',
+        'la anterior semana': 'last_week',
         'este mes': 'this_month',
-        'mes': 'this_month',
         'mes actual': 'this_month',
         'último mes': 'last_month',
         'ultimo mes': 'last_month',
         'mes pasado': 'last_month',
         'este año': 'this_year',
-        'año': 'this_year',
         'año actual': 'this_year',
         'año 2025': 'year_2025',
         'año 2024': 'year_2024',
         '2025': 'year_2025',
         '2024': 'year_2024',
+        # Trimestres
+        'primer trimestre': 'q1',
+        'trimestre 1': 'q1',
+        'q1': 'q1',
+        'segundo trimestre': 'q2',
+        'trimestre 2': 'q2',
+        'q2': 'q2',
+        'tercer trimestre': 'q3',
+        'trimestre 3': 'q3',
+        'q3': 'q3',
+        'cuarto trimestre': 'q4',
+        'trimestre 4': 'q4',
+        'q4': 'q4',
+        # Semestres
+        'primer semestre': 'h1',
+        'semestre 1': 'h1',
+        'h1': 'h1',
+        'segundo semestre': 'h2',
+        'semestre 2': 'h2',
+        'h2': 'h2',
+        # Períodos relativos
         'últimos 7 días': 'last_7_days',
         'últimos 30 días': 'last_30_days',
         'últimos 90 días': 'last_90_days',
@@ -178,19 +199,72 @@ class PromptParser:
         """
         today = datetime.now().date()
 
-        # Buscar períodos predefinidos
-        for spanish_period, period_key in cls.PERIODS.items():
-            if spanish_period in prompt:
-                return cls._get_period_dates(period_key, today)
+        # 1. PRIORIDAD MÁXIMA: Buscar rangos explícitos de fechas PRIMERO
+        # "del DD/MM/YYYY al DD/MM/YYYY" tiene máxima prioridad
+        range_patterns = [
+            r'del?\s+(\d{1,2}[/-]\d{1,2}[/-]\d{4})\s+al?\s+(\d{1,2}[/-]\d{1,2}[/-]\d{4})',
+            r'desde\s+(\d{1,2}[/-]\d{1,2}[/-]\d{4})\s+hasta\s+(\d{1,2}[/-]\d{1,2}[/-]\d{4})',
+            r'entre\s+(\d{1,2}[/-]\d{1,2}[/-]\d{4})\s+y\s+(\d{1,2}[/-]\d{1,2}[/-]\d{4})',
+        ]
+        
+        for pattern in range_patterns:
+            match = re.search(pattern, prompt)
+            if match:
+                start_date = cls._parse_date(match.group(1))
+                end_date = cls._parse_date(match.group(2))
+                return {
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'label': f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
+                }
 
-        # Buscar meses específicos
+        # 2. Buscar trimestres con año específico: "primer trimestre 2024"
+        quarter_year_patterns = [
+            (r'(?:primer|1er|primero)\s+trimestre\s+(\d{4})', 'q1'),
+            (r'(?:segundo|2do)\s+trimestre\s+(\d{4})', 'q2'),
+            (r'(?:tercer|3er|tercero)\s+trimestre\s+(\d{4})', 'q3'),
+            (r'(?:cuarto|4to)\s+trimestre\s+(\d{4})', 'q4'),
+            (r'q([1-4])\s+(\d{4})', None),  # "Q1 2024"
+        ]
+        
+        for pattern, quarter in quarter_year_patterns:
+            match = re.search(pattern, prompt)
+            if match:
+                if quarter:
+                    year = int(match.group(1))
+                    return cls._get_quarter_dates(quarter, year)
+                else:
+                    # Formato Q1 2024
+                    quarter_num = match.group(1)
+                    year = int(match.group(2))
+                    return cls._get_quarter_dates(f'q{quarter_num}', year)
+
+        # 3. Buscar semestres con año específico: "primer semestre 2024"
+        semester_year_patterns = [
+            (r'(?:primer|1er|primero)\s+semestre\s+(\d{4})', 'h1'),
+            (r'(?:segundo|2do)\s+semestre\s+(\d{4})', 'h2'),
+            (r'h([1-2])\s+(\d{4})', None),  # "H1 2024"
+        ]
+        
+        for pattern, semester in semester_year_patterns:
+            match = re.search(pattern, prompt)
+            if match:
+                if semester:
+                    year = int(match.group(1))
+                    return cls._get_semester_dates(semester, year)
+                else:
+                    # Formato H1 2024
+                    semester_num = match.group(1)
+                    year = int(match.group(2))
+                    return cls._get_semester_dates(f'h{semester_num}', year)
+
+        # 4. Buscar meses con año específico: "octubre 2025"
         for month_name, month_num in cls.MONTHS.items():
-            if month_name in prompt:
-                # Extraer año si está presente
-                year_match = re.search(r'(\d{4})', prompt)
-                year = int(year_match.group(1)) if year_match else today.year
-
-                # Primer y último día del mes
+            # Buscar formato "octubre 2025" o "octubre del 2025"
+            month_year_pattern = rf'{month_name}\s+(?:del?\s+)?(\d{{4}})'
+            match = re.search(month_year_pattern, prompt)
+            if match:
+                year = int(match.group(1))
                 from calendar import monthrange
                 start_date = datetime(year, month_num, 1).date()
                 _, last_day = monthrange(year, month_num)
@@ -202,7 +276,45 @@ class PromptParser:
                     'label': f"{month_name.title()} {year}"
                 }
 
-        # Buscar "últimos N días/semanas/meses"
+        # 5. Buscar años específicos como "del año 2024", "año 2024", "2024"
+        year_patterns = [
+            (r'(?:del?\s+)?año\s+(\d{4})', None),  # "del año 2024", "año 2024"
+            (r'(?:del?\s+|en\s+)?(\d{4})(?:\s+|$)', None),  # "2024", "del 2024", "en 2024"
+        ]
+        
+        for pattern, _ in year_patterns:
+            match = re.search(pattern, prompt)
+            if match:
+                year = int(match.group(1))
+                # Verificar si es un año válido (entre 2020 y 2030)
+                if 2020 <= year <= 2030:
+                    return {
+                        'start_date': datetime(year, 1, 1).date(),
+                        'end_date': datetime(year, 12, 31).date(),
+                        'label': f'Año {year}'
+                    }
+
+        # 6. Buscar períodos predefinidos (esta semana, este mes, etc.)
+        for spanish_period, period_key in cls.PERIODS.items():
+            if spanish_period in prompt:
+                return cls._get_period_dates(period_key, today)
+
+        # 7. Buscar solo meses (sin año = año actual)
+        for month_name, month_num in cls.MONTHS.items():
+            if month_name in prompt and not re.search(rf'{month_name}\s+\d{{4}}', prompt):
+                year = today.year
+                from calendar import monthrange
+                start_date = datetime(year, month_num, 1).date()
+                _, last_day = monthrange(year, month_num)
+                end_date = datetime(year, month_num, last_day).date()
+
+                return {
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'label': f"{month_name.title()} {year}"
+                }
+
+        # 8. Buscar "últimos N días/semanas/meses"
         last_n_match = re.search(r'últimos?\s+(\d+)\s+(d[ií]as?|semanas?|meses?)', prompt)
         if last_n_match:
             quantity = int(last_n_match.group(1))
@@ -226,7 +338,7 @@ class PromptParser:
                 'label': label
             }
 
-        # Buscar fechas específicas en formato DD/MM/YYYY o YYYY-MM-DD
+        # 9. Si no encontró rangos explícitos, buscar fechas individuales
         date_pattern = r'(\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})'
         dates = re.findall(date_pattern, prompt)
 
@@ -236,14 +348,14 @@ class PromptParser:
             return {
                 'start_date': start_date,
                 'end_date': end_date,
-                'label': f"{start_date} a {end_date}"
+                'label': f"{start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}"
             }
         elif len(dates) == 1:
             date = cls._parse_date(dates[0])
             return {
                 'start_date': date,
                 'end_date': date,
-                'label': str(date)
+                'label': date.strftime('%d/%m/%Y')
             }
 
         return None
@@ -270,6 +382,16 @@ class PromptParser:
                 'start_date': start,
                 'end_date': today,
                 'label': 'Esta semana'
+            }
+        elif period_key == 'last_week':
+            # Lunes de la semana pasada
+            start = today - timedelta(days=today.weekday() + 7)
+            # Domingo de la semana pasada
+            end = start + timedelta(days=6)
+            return {
+                'start_date': start,
+                'end_date': end,
+                'label': 'Semana pasada'
             }
         elif period_key == 'last_7_days':
             start = today - timedelta(days=7)
@@ -327,8 +449,57 @@ class PromptParser:
                 'end_date': datetime(2024, 12, 31).date(),
                 'label': 'Año 2024'
             }
+        # Trimestres (año actual por defecto)
+        elif period_key in ['q1', 'q2', 'q3', 'q4']:
+            return cls._get_quarter_dates(period_key, today.year)
+        # Semestres (año actual por defecto)
+        elif period_key in ['h1', 'h2']:
+            return cls._get_semester_dates(period_key, today.year)
 
         return None
+
+    @classmethod
+    def _get_quarter_dates(cls, quarter: str, year: int) -> Dict[str, Any]:
+        """
+        Obtener fechas para un trimestre específico.
+        Q1: Ene-Mar, Q2: Abr-Jun, Q3: Jul-Sep, Q4: Oct-Dic
+        """
+        quarters = {
+            'q1': (1, 3, 'Primer Trimestre'),
+            'q2': (4, 6, 'Segundo Trimestre'),
+            'q3': (7, 9, 'Tercer Trimestre'),
+            'q4': (10, 12, 'Cuarto Trimestre'),
+        }
+        
+        start_month, end_month, label = quarters[quarter.lower()]
+        
+        from calendar import monthrange
+        _, last_day = monthrange(year, end_month)
+        
+        return {
+            'start_date': datetime(year, start_month, 1).date(),
+            'end_date': datetime(year, end_month, last_day).date(),
+            'label': f"{label} {year}"
+        }
+
+    @classmethod
+    def _get_semester_dates(cls, semester: str, year: int) -> Dict[str, Any]:
+        """
+        Obtener fechas para un semestre específico.
+        H1: Ene-Jun, H2: Jul-Dic
+        """
+        if semester.lower() == 'h1':
+            return {
+                'start_date': datetime(year, 1, 1).date(),
+                'end_date': datetime(year, 6, 30).date(),
+                'label': f"Primer Semestre {year}"
+            }
+        else:  # h2
+            return {
+                'start_date': datetime(year, 7, 1).date(),
+                'end_date': datetime(year, 12, 31).date(),
+                'label': f"Segundo Semestre {year}"
+            }
 
     @classmethod
     def _parse_date(cls, date_str: str) -> datetime.date:

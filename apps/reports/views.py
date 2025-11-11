@@ -41,7 +41,8 @@ class ReportsViewSet(viewsets.ViewSet):
 
         POST /api/reports/generate/
         Body: {
-            "prompt": "Reporte de ventas de septiembre en PDF"
+            "prompt": "Reporte de ventas de septiembre en PDF",
+            "format": "excel"  // Opcional: sobreescribe el formato del prompt
         }
 
         Returns:
@@ -51,16 +52,18 @@ class ReportsViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
 
         prompt = serializer.validated_data['prompt']
+        format_override = serializer.validated_data.get('format')  # Formato del select
 
         try:
             # Obtener nombre del usuario
             user_name = request.user.nombre_completo
 
-            # Generar reporte
+            # Generar reporte (el formato del select tiene prioridad)
             file_content, filename, mime_type = ReportGeneratorService.generate_from_prompt(
                 prompt=prompt,
                 user_name=user_name,
-                organization_name="SmartSales365"
+                organization_name="SmartSales365",
+                format_override=format_override  # Prioridad al formato del select
             )
 
             # Retornar archivo
@@ -393,6 +396,7 @@ class AnalyticsViewSet(viewsets.ViewSet):
                 'summary': AnalyticsService.get_summary(),
                 'inventory_summary': AnalyticsService.get_inventory_summary(),
                 'customer_analytics': AnalyticsService.get_customer_analytics(),
+                'yearly_comparison': AnalyticsService.get_yearly_comparison(),  # NUEVO
             }
 
             return Response(data, status=status.HTTP_200_OK)
@@ -529,3 +533,39 @@ class AnalyticsViewSet(viewsets.ViewSet):
                 {'error': f'Error al obtener datos: {str(e)}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    @action(detail=False, methods=['get'])
+    def yearly_comparison(self, request):
+        """
+        Obtener comparativa detallada 2024 vs 2025.
+
+        GET /api/analytics/yearly_comparison/
+
+        Returns:
+            {
+                "year_2024": {
+                    "total_ventas": 12345.67,
+                    "total_pedidos": 123,
+                    "nuevos_clientes": 45,
+                    "nuevos_productos": 67,
+                    "ticket_promedio": 123.45,
+                    "ventas_por_mes": [...]
+                },
+                "year_2025": {...},
+                "comparison": {
+                    "cambio_ventas_porcentaje": 15.5,
+                    "cambio_pedidos_porcentaje": 20.3,
+                    ...
+                }
+            }
+        """
+        try:
+            data = AnalyticsService.get_yearly_comparison()
+            return Response(data, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"Error al obtener comparativa anual: {e}", exc_info=True)
+            return Response(
+                {'error': f'Error al obtener comparativa: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
