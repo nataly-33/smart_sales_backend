@@ -128,6 +128,232 @@ class ReportsViewSet(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    @action(detail=False, methods=['post'])
+    def preview(self, request):
+        """
+        Previsualizar un reporte sin generarlo completamente.
+        Devuelve máximo 20 filas de muestra.
+
+        POST /api/reports/preview/
+        Body: {
+            "prompt": "Reporte de ventas del último mes"
+        }
+
+        Returns:
+            {
+                "data": [...],  // Máximo 20 filas
+                "metadata": {...},
+                "total_rows": 123,
+                "config": {...}
+            }
+        """
+        from .services.prompt_parser import PromptParser, PromptParseError
+        from .services.query_builder import QueryBuilder, QueryBuilderError
+
+        serializer = GenerateReportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        prompt = serializer.validated_data['prompt']
+
+        try:
+            # Parsear el prompt
+            config = PromptParser.parse(prompt)
+
+            # Forzar límite de 20 para preview
+            config['limit'] = 20
+
+            # Construir query y obtener datos
+            result = QueryBuilder.build(config)
+
+            return Response({
+                'data': result['data'][:20],
+                'metadata': result['metadata'],
+                'total_rows': result['metadata'].get('total_records', len(result['data'])),
+                'config': config,
+                'message': 'Preview generado. Los datos reales pueden ser más extensos.'
+            }, status=status.HTTP_200_OK)
+
+        except PromptParseError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except QueryBuilderError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Error en preview: {e}", exc_info=True)
+            return Response(
+                {'error': 'Error al generar preview'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['get'])
+    def templates(self, request):
+        """
+        Obtener plantillas de reportes predefinidos.
+
+        GET /api/reports/templates/
+
+        Returns:
+            [
+                {
+                    "id": "ventas_mes",
+                    "name": "Ventas del mes",
+                    "description": "...",
+                    "prompt_example": "...",
+                    "category": "ventas"
+                },
+                ...
+            ]
+        """
+        templates = [
+            {
+                'id': 'ventas_mes_actual',
+                'name': 'Ventas del mes actual',
+                'description': 'Listado completo de todas las ventas del mes en curso',
+                'prompt_example': 'Ventas del mes actual en PDF',
+                'category': 'ventas'
+            },
+            {
+                'id': 'ventas_2025',
+                'name': 'Ventas del año 2025',
+                'description': 'Todas las ventas realizadas en el año 2025',
+                'prompt_example': 'Ventas del año 2025 en Excel',
+                'category': 'ventas'
+            },
+            {
+                'id': 'ventas_por_producto',
+                'name': 'Ventas agrupadas por producto',
+                'description': 'Reporte de ventas agrupado por cada producto',
+                'prompt_example': 'Reporte de ventas del último mes agrupado por producto en PDF',
+                'category': 'ventas'
+            },
+            {
+                'id': 'ventas_por_cliente',
+                'name': 'Ventas agrupadas por cliente',
+                'description': 'Reporte de ventas agrupado por cliente con totales',
+                'prompt_example': 'Ventas agrupadas por cliente del año 2025 en Excel',
+                'category': 'ventas'
+            },
+            {
+                'id': 'pedidos_pendientes',
+                'name': 'Pedidos pendientes',
+                'description': 'Listado de pedidos en estado pendiente',
+                'prompt_example': 'Pedidos pendientes en PDF',
+                'category': 'ventas'
+            },
+            {
+                'id': 'top_productos',
+                'name': 'Top 10 productos más vendidos',
+                'description': 'Los 10 productos con mayor cantidad de ventas',
+                'prompt_example': 'Top 10 productos más vendidos del año 2025 en PDF',
+                'category': 'productos'
+            },
+            {
+                'id': 'productos_stock_bajo',
+                'name': 'Productos con stock bajo',
+                'description': 'Productos que tienen poco stock disponible',
+                'prompt_example': 'Productos con stock bajo en Excel',
+                'category': 'productos'
+            },
+            {
+                'id': 'inventario_completo',
+                'name': 'Inventario completo',
+                'description': 'Listado de todos los productos con su stock actual',
+                'prompt_example': 'Inventario completo en Excel',
+                'category': 'productos'
+            },
+            {
+                'id': 'productos_por_categoria',
+                'name': 'Productos agrupados por categoría',
+                'description': 'Reporte de productos organizados por categoría',
+                'prompt_example': 'Productos agrupados por categoría en PDF',
+                'category': 'productos'
+            },
+            {
+                'id': 'clientes_nuevos_mes',
+                'name': 'Clientes registrados este mes',
+                'description': 'Nuevos clientes que se registraron en el mes actual',
+                'prompt_example': 'Clientes registrados este mes en Excel',
+                'category': 'clientes'
+            },
+            {
+                'id': 'clientes_2025',
+                'name': 'Clientes del año 2025',
+                'description': 'Todos los clientes registrados en el año 2025',
+                'prompt_example': 'Clientes del año 2025 en Excel',
+                'category': 'clientes'
+            },
+            {
+                'id': 'clientes_top_compradores',
+                'name': 'Top 10 mejores clientes',
+                'description': 'Los 10 clientes con mayor volumen de compras',
+                'prompt_example': 'Top 10 clientes con más compras en PDF',
+                'category': 'clientes'
+            },
+            {
+                'id': 'logins_hoy',
+                'name': 'Logins de hoy',
+                'description': 'Registro de inicios de sesión del día de hoy',
+                'prompt_example': 'Logins de hoy en Excel',
+                'category': 'analytics'
+            },
+            {
+                'id': 'logins_7_dias',
+                'name': 'Logins últimos 7 días',
+                'description': 'Registro de inicios de sesión de los últimos 7 días',
+                'prompt_example': 'Logins de los últimos 7 días en Excel',
+                'category': 'analytics'
+            },
+            {
+                'id': 'logins_30_dias',
+                'name': 'Logins últimos 30 días',
+                'description': 'Registro de inicios de sesión de los últimos 30 días',
+                'prompt_example': 'Logins de los últimos 30 días en Excel',
+                'category': 'analytics'
+            },
+            {
+                'id': 'carritos_activos',
+                'name': 'Carritos activos',
+                'description': 'Carritos de compra que tienen items pendientes',
+                'prompt_example': 'Carritos activos con items en PDF',
+                'category': 'analytics'
+            },
+            {
+                'id': 'ingresos_mes',
+                'name': 'Ingresos por día del mes',
+                'description': 'Reporte de ingresos diarios del mes actual',
+                'prompt_example': 'Ingresos por día del mes actual en Excel',
+                'category': 'analytics'
+            },
+            {
+                'id': 'ingresos_2025',
+                'name': 'Ingresos del año 2025',
+                'description': 'Reporte de ingresos por día del año 2025',
+                'prompt_example': 'Ingresos del año 2025 en Excel',
+                'category': 'analytics'
+            },
+            {
+                'id': 'analytics_completo',
+                'name': 'Analytics completo',
+                'description': 'Reporte completo con todas las métricas y estadísticas',
+                'prompt_example': 'Reporte de analytics completo en PDF',
+                'category': 'analytics'
+            },
+            {
+                'id': 'resumen_mensual',
+                'name': 'Resumen mensual',
+                'description': 'Resumen de ventas, productos y clientes del mes',
+                'prompt_example': 'Resumen del mes actual en PDF',
+                'category': 'analytics'
+            }
+        ]
+
+        return Response(templates, status=status.HTTP_200_OK)
+
 
 class AnalyticsViewSet(viewsets.ViewSet):
     """

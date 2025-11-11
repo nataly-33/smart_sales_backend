@@ -28,10 +28,14 @@ class PromptParser:
 
     # Tipos de reportes soportados
     REPORT_TYPES = {
-        'ventas': ['ventas', 'venta', 'pedidos', 'pedido', 'ordenes', 'orden'],
+        'ventas': ['ventas', 'venta', 'pedidos', 'pedido', 'ordenes', 'orden', 'compras', 'compra'],
         'productos': ['productos', 'producto', 'prendas', 'prenda', 'inventario', 'stock'],
-        'clientes': ['clientes', 'cliente', 'usuarios', 'usuario'],
-        'analytics': ['analytics', 'anal\u00edticas', 'estad\u00edsticas', 'estadisticas', 'resumen'],
+        'clientes': ['clientes', 'cliente', 'usuarios', 'usuario', 'compradores'],
+        'analytics': ['analytics', 'analíticas', 'estadísticas', 'estadisticas', 'resumen', 'dashboard', 'métricas', 'metricas'],
+        'logins': ['logins', 'inicios de sesión', 'sesiones', 'accesos', 'ingresos al sistema'],
+        'carritos': ['carritos', 'carritos activos', 'carros de compra'],
+        'top_productos': ['top productos', 'productos más vendidos', 'más vendidos', 'best sellers'],
+        'ingresos': ['ingresos', 'ganancias', 'facturación', 'facturacion', 'revenue'],
     }
 
     # Formatos soportados
@@ -43,13 +47,23 @@ class PromptParser:
         'ayer': 'yesterday',
         'esta semana': 'this_week',
         'semana': 'this_week',
+        'semana actual': 'this_week',
         'este mes': 'this_month',
         'mes': 'this_month',
+        'mes actual': 'this_month',
         'último mes': 'last_month',
         'ultimo mes': 'last_month',
+        'mes pasado': 'last_month',
         'este año': 'this_year',
         'año': 'this_year',
-        'a\u00f1o': 'this_year',
+        'año actual': 'this_year',
+        'año 2025': 'year_2025',
+        'año 2024': 'year_2024',
+        '2025': 'year_2025',
+        '2024': 'year_2024',
+        'últimos 7 días': 'last_7_days',
+        'últimos 30 días': 'last_30_days',
+        'últimos 90 días': 'last_90_days',
     }
 
     # Meses en español
@@ -257,6 +271,27 @@ class PromptParser:
                 'end_date': today,
                 'label': 'Esta semana'
             }
+        elif period_key == 'last_7_days':
+            start = today - timedelta(days=7)
+            return {
+                'start_date': start,
+                'end_date': today,
+                'label': 'Últimos 7 días'
+            }
+        elif period_key == 'last_30_days':
+            start = today - timedelta(days=30)
+            return {
+                'start_date': start,
+                'end_date': today,
+                'label': 'Últimos 30 días'
+            }
+        elif period_key == 'last_90_days':
+            start = today - timedelta(days=90)
+            return {
+                'start_date': start,
+                'end_date': today,
+                'label': 'Últimos 90 días'
+            }
         elif period_key == 'this_month':
             start = today.replace(day=1)
             return {
@@ -279,6 +314,18 @@ class PromptParser:
                 'start_date': start,
                 'end_date': today,
                 'label': 'Este año'
+            }
+        elif period_key == 'year_2025':
+            return {
+                'start_date': datetime(2025, 1, 1).date(),
+                'end_date': datetime(2025, 12, 31).date(),
+                'label': 'Año 2025'
+            }
+        elif period_key == 'year_2024':
+            return {
+                'start_date': datetime(2024, 1, 1).date(),
+                'end_date': datetime(2024, 12, 31).date(),
+                'label': 'Año 2024'
             }
 
         return None

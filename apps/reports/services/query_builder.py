@@ -46,6 +46,14 @@ class QueryBuilder:
             return cls._build_customers_report(config)
         elif report_type == 'analytics':
             return cls._build_analytics_report(config)
+        elif report_type == 'logins':
+            return cls._build_logins_report(config)
+        elif report_type == 'carritos':
+            return cls._build_carts_report(config)
+        elif report_type == 'top_productos':
+            return cls._build_top_products_report(config)
+        elif report_type == 'ingresos':
+            return cls._build_revenue_report(config)
         else:
             raise QueryBuilderError(f"Tipo de reporte no soportado: {report_type}")
 
@@ -280,6 +288,174 @@ class QueryBuilder:
         metadata = {
             'generated_at': datetime.now().isoformat(),
             'report_type': 'analytics'
+        }
+
+        return {
+            'data': data,
+            'metadata': metadata
+        }
+
+    @classmethod
+    def _build_logins_report(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Construir reporte de logins"""
+        from apps.accounts.models import LoginAudit
+
+        queryset = LoginAudit.objects.all()
+
+        # Aplicar filtros de período
+        if config.get('period'):
+            start_date = config['period']['start_date']
+            end_date = config['period']['end_date']
+            queryset = queryset.filter(
+                created_at__date__gte=start_date,
+                created_at__date__lte=end_date
+            )
+
+        # Ordenar por más recientes
+        queryset = queryset.select_related('user').order_by('-created_at')
+
+        # Aplicar límite si existe
+        if config.get('limit'):
+            queryset = queryset[:config['limit']]
+
+        data = [{
+            'usuario': login.user.nombre_completo,
+            'email': login.user.email,
+            'fecha_hora': login.created_at.strftime('%d/%m/%Y %H:%M:%S'),
+            'ip': login.ip_address,
+            'exitoso': 'Sí' if login.success else 'No'
+        } for login in queryset]
+
+        metadata = {
+            'total_records': len(data),
+            'period': config.get('period', {}).get('label', 'Todo el tiempo'),
+        }
+
+        return {
+            'data': data,
+            'metadata': metadata
+        }
+
+    @classmethod
+    def _build_carts_report(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Construir reporte de carritos activos"""
+        from apps.cart.models import Carrito
+        from django.db.models import Count
+
+        # Carritos con items (no eliminados)
+        queryset = Carrito.objects.annotate(
+            num_items=Count('items', filter=Q(items__deleted_at__isnull=True))
+        ).filter(num_items__gt=0).select_related('usuario')
+
+        # Aplicar límite
+        if config.get('limit'):
+            queryset = queryset[:config['limit']]
+
+        data = [{
+            'usuario': carrito.usuario.nombre_completo,
+            'email': carrito.usuario.email,
+            'cantidad_items': carrito.total_items,
+            'cantidad_productos': carrito.cantidad_total_items,
+            'subtotal': float(carrito.subtotal),
+            'fecha_creacion': carrito.created_at.strftime('%d/%m/%Y %H:%M')
+        } for carrito in queryset]
+
+        metadata = {
+            'total_records': len(data),
+        }
+
+        return {
+            'data': data,
+            'metadata': metadata
+        }
+
+    @classmethod
+    def _build_top_products_report(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Construir reporte de productos más vendidos"""
+        from apps.orders.models import DetallePedido, Pedido
+
+        # Query base
+        detalles_qs = DetallePedido.objects.select_related('prenda')
+
+        # Filtrar por período si existe
+        if config.get('period'):
+            start_date = config['period']['start_date']
+            end_date = config['period']['end_date']
+            detalles_qs = detalles_qs.filter(
+                pedido__created_at__date__gte=start_date,
+                pedido__created_at__date__lte=end_date
+            )
+
+        # Agrupar por producto y ordenar
+        productos_vendidos = detalles_qs.values(
+            'prenda__nombre',
+            'prenda__precio'
+        ).annotate(
+            cantidad_vendida=Sum('cantidad'),
+            total_ingresos=Sum(F('cantidad') * F('precio_unitario'))
+        ).order_by('-cantidad_vendida')
+
+        # Aplicar límite (por defecto top 10)
+        limit = config.get('limit', 10)
+        productos_vendidos = productos_vendidos[:limit]
+
+        data = [{
+            'producto': item['prenda__nombre'],
+            'precio_unitario': float(item['prenda__precio']),
+            'cantidad_vendida': item['cantidad_vendida'],
+            'total_ingresos': float(item['total_ingresos'])
+        } for item in productos_vendidos]
+
+        metadata = {
+            'total_records': len(data),
+            'period': config.get('period', {}).get('label', 'Todo el tiempo'),
+            'limit': limit
+        }
+
+        return {
+            'data': data,
+            'metadata': metadata
+        }
+
+    @classmethod
+    def _build_revenue_report(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Construir reporte de ingresos por período"""
+        from apps.orders.models import Pedido
+
+        queryset = Pedido.objects.all()
+
+        # Aplicar filtros de período
+        if config.get('period'):
+            start_date = config['period']['start_date']
+            end_date = config['period']['end_date']
+            queryset = queryset.filter(
+                created_at__date__gte=start_date,
+                created_at__date__lte=end_date
+            )
+
+        # Agrupar por día
+        ingresos_por_dia = queryset.extra({
+            'fecha': "DATE(created_at)"
+        }).values('fecha').annotate(
+            cantidad_pedidos=Count('id'),
+            total_ingresos=Sum('total')
+        ).order_by('fecha')
+
+        data = [{
+            'fecha': item['fecha'].strftime('%d/%m/%Y') if hasattr(item['fecha'], 'strftime') else str(item['fecha']),
+            'cantidad_pedidos': item['cantidad_pedidos'],
+            'total_ingresos': float(item['total_ingresos'] or 0)
+        } for item in ingresos_por_dia]
+
+        # Calcular totales
+        total_pedidos = sum(item['cantidad_pedidos'] for item in data)
+        total_ingresos = sum(item['total_ingresos'] for item in data)
+
+        metadata = {
+            'total_records': len(data),
+            'period': config.get('period', {}).get('label', 'Todo el tiempo'),
+            'total_pedidos': total_pedidos,
+            'total_ingresos': total_ingresos
         }
 
         return {
