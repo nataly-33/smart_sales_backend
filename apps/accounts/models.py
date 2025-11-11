@@ -114,3 +114,30 @@ class User(AbstractBaseUser, BaseModel):
         if not self.rol:
             return False
         return self.rol.permisos.filter(codigo=codigo_permiso).exists()
+
+
+class LoginAudit(BaseModel):
+    """Auditoría de inicios de sesión"""
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='login_audits',
+        verbose_name='Usuario'
+    )
+    ip_address = models.GenericIPAddressField(verbose_name='Dirección IP')
+    user_agent = models.TextField(blank=True, verbose_name='User Agent')
+    success = models.BooleanField(default=True, verbose_name='Login exitoso')
+    
+    class Meta:
+        db_table = 'login_audit'
+        verbose_name = 'Auditoría de Login'
+        verbose_name_plural = 'Auditorías de Login'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['-created_at']),
+        ]
+    
+    def __str__(self):
+        status = "exitoso" if self.success else "fallido"
+        return f"Login {status} - {self.user.email} - {self.created_at}"

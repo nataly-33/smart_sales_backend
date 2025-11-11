@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Role, Permission
+from .models import User, Role, Permission, LoginAudit
 
 
 @admin.register(User)
@@ -49,3 +49,18 @@ class PermissionAdmin(admin.ModelAdmin):
     list_display = ['codigo', 'nombre', 'modulo', 'created_at']
     list_filter = ['modulo']
     search_fields = ['codigo', 'nombre']
+
+
+@admin.register(LoginAudit)
+class LoginAuditAdmin(admin.ModelAdmin):
+    list_display = ['user', 'ip_address', 'success', 'created_at']
+    list_filter = ['success', 'created_at']
+    search_fields = ['user__email', 'ip_address']
+    readonly_fields = ['user', 'ip_address', 'user_agent', 'success', 'created_at']
+    date_hierarchy = 'created_at'
+    
+    def has_add_permission(self, request):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        return False

@@ -12,11 +12,31 @@ from .serializers import (
     RegisterSerializer, ChangePasswordSerializer
 )
 from apps.core.permissions import IsAdminUser
+from .signals import user_logged_in
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     """Login con JWT personalizado"""
     serializer_class = CustomTokenObtainPairSerializer
+    
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        
+        # Si el login fue exitoso, disparar la señal
+        if response.status_code == 200:
+            # Obtener el usuario desde el serializador
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            user = serializer.user
+            
+            # Disparar señal de login exitoso
+            user_logged_in.send(
+                sender=self.__class__,
+                user=user,
+                request=request
+            )
+        
+        return response
 
 
 class RegisterViewSet(viewsets.GenericViewSet):
