@@ -81,6 +81,8 @@ class PromptParser:
         'segundo semestre': 'h2',
         'semestre 2': 'h2',
         'h2': 'h2',
+        'último semestre': 'last_semester',
+        'ultimo semestre': 'last_semester',
         # Períodos relativos
         'últimos 7 días': 'last_7_days',
         'últimos 30 días': 'last_30_days',
@@ -168,6 +170,17 @@ class PromptParser:
     @classmethod
     def _extract_report_type(cls, prompt: str) -> str:
         """Extraer tipo de reporte del prompt"""
+        # Priorizar detecciones más específicas primero
+        
+        # "Top N productos más vendidos" o "productos más vendidos"
+        if re.search(r'(?:top\s+\d+\s+)?productos?\s+m[áa]s\s+vendidos?', prompt):
+            return 'top_productos'
+        
+        # "Top N clientes" con contexto de compras/ventas
+        if re.search(r'(?:top\s+\d+\s+)?clientes?.*(?:compras?|ventas?|gastado)', prompt):
+            return 'top_clientes'
+        
+        # Ahora buscar tipos generales
         for report_type, keywords in cls.REPORT_TYPES.items():
             for keyword in keywords:
                 if keyword in prompt:
@@ -449,6 +462,25 @@ class PromptParser:
                 'end_date': datetime(2024, 12, 31).date(),
                 'label': 'Año 2024'
             }
+        elif period_key == 'last_semester':
+            # Último semestre: determinar si estamos en H1 o H2
+            current_month = today.month
+            if current_month <= 6:
+                # Estamos en H1, el último semestre es H2 del año anterior
+                year = today.year - 1
+                return {
+                    'start_date': datetime(year, 7, 1).date(),
+                    'end_date': datetime(year, 12, 31).date(),
+                    'label': f'Último Semestre ({year} H2)'
+                }
+            else:
+                # Estamos en H2, el último semestre es H1 de este año
+                year = today.year
+                return {
+                    'start_date': datetime(year, 1, 1).date(),
+                    'end_date': datetime(year, 6, 30).date(),
+                    'label': f'Último Semestre ({year} H1)'
+                }
         # Trimestres (año actual por defecto)
         elif period_key in ['q1', 'q2', 'q3', 'q4']:
             return cls._get_quarter_dates(period_key, today.year)
@@ -525,13 +557,17 @@ class PromptParser:
                     filters['estado'] = status_value
                     break
 
-        # Buscar "categoría X"
-        category_match = re.search(r'categor[ií]a\s+(\w+)', prompt)
+        # Buscar "categoría NOMBRE" (no solo palabra después de categoría)
+        # Usar regex más estricto para evitar capturar partes de otras palabras
+        category_match = re.search(r'categor[ií]a\s+([a-záéíóúñ]+)(?:\s|$)', prompt)
         if category_match:
-            filters['categoria'] = category_match.group(1).title()
+            category_name = category_match.group(1).title()
+            # Excluir palabras que no son categorías (como "En" de "Excel")
+            if category_name not in ['En', 'El', 'La', 'Los', 'Las', 'Del', 'De']:
+                filters['categoria'] = category_name
 
-        # Buscar "marca X"
-        brand_match = re.search(r'marca\s+(\w+)', prompt)
+        # Buscar "marca NOMBRE"
+        brand_match = re.search(r'marca\s+([a-záéíóúñ]+)(?:\s|$)', prompt)
         if brand_match:
             filters['marca'] = brand_match.group(1).title()
 
@@ -545,29 +581,23 @@ class PromptParser:
         # Normalizar prompt
         prompt_lower = prompt.lower()
 
-        # Producto/Productos
-        if re.search(r'productos?(?:\s|$|,|y)', prompt_lower):
-            # Verificar que es contexto de agrupación
-            if re.search(r'(?:agrupada?s?|por)\s+(?:\w+\s+)?productos?', prompt_lower):
-                group_by.append('producto')
+        # Mes/Meses - detectar "agrupadas por mes", "por mes"
+        if re.search(r'(?:agrupad[oa]s?\s+por|por)\s+mes(?:es)?(?:\s|$|,)', prompt_lower):
+            group_by.append('mes')
         
-        # Categoría/Categorías  
-        if re.search(r'categor[ií]as?(?:\s|$|,|y)', prompt_lower):
-            if re.search(r'(?:agrupada?s?|por)\s+(?:\w+\s+)?categor[ií]as?', prompt_lower):
-                group_by.append('categoria')
+        # Categoría/Categorías
+        if re.search(r'(?:agrupad[oa]s?\s+por|por)\s+categor[ií]as?(?:\s|$|,)', prompt_lower):
+            group_by.append('categoria')
         
         # Cliente/Clientes
-        if re.search(r'clientes?(?:\s|$|,|y)', prompt_lower):
-            if re.search(r'(?:agrupada?s?|por)\s+(?:\w+\s+)?clientes?', prompt_lower):
-                group_by.append('cliente')
+        if re.search(r'(?:agrupad[oa]s?\s+por|por)\s+clientes?(?:\s|$|,)', prompt_lower):
+            group_by.append('cliente')
         
-        # Mes/Meses - evitar confusión con fechas
-        if re.search(r'meses?(?:\s|$|,|y)', prompt_lower):
-            # Buscar en contexto de agrupación, no en fechas
-            if re.search(r'(?:agrupada?s?|por)\s+(?:\w+\s+)?meses?', prompt_lower):
-                # Excluir casos como "desde el mes de"
-                if not re.search(r'(?:desde|del|en el|para el)\s+mes(?:es)?', prompt_lower):
-                    group_by.append('mes')
+        # Producto/Productos
+        if re.search(r'(?:agrupad[oa]s?\s+por|por)\s+productos?(?:\s|$|,)', prompt_lower):
+            # Verificar que no sea parte de "productos más vendidos" sin agrupación
+            if re.search(r'(?:agrupad[oa]s?\s+por|por)\s+productos?', prompt_lower):
+                group_by.append('producto')
 
         return group_by
 
