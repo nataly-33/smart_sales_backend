@@ -84,9 +84,6 @@ class CarritoViewSet(viewsets.GenericViewSet):
                     precio_unitario=prenda.precio
                 )
         
-        # Actualizar el total del carrito
-        carrito.actualizar_total()
-        
         # Devolver el carrito actualizado
         carrito_serializer = CarritoSerializer(carrito)
         logger.info(f"Item agregado - Carrito total: {carrito.total}")
