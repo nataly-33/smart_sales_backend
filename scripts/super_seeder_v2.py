@@ -423,11 +423,12 @@ def seed_usuarios_principales():
     return usuarios_creados
 
 def seed_clientes(cantidad=1000):
-    """Crear clientes con fechas distribuidas en 3 años (80% mujeres)"""
+    """Crear clientes con emails estáticos ejemplo@example.com"""
     print_header(f"👥 CREANDO {cantidad} CLIENTES (80% MUJERES)")
     
     rol_cliente = Role.objects.get(nombre='Cliente')
     clientes = []
+    clientes_info = []
     
     fecha_inicio = django_timezone.make_aware(datetime(2023, 1, 1))
     fecha_fin = django_timezone.make_aware(datetime(2025, 11, 11))
@@ -448,7 +449,8 @@ def seed_clientes(cantidad=1000):
         dias_random = random.randint(0, dias_totales)
         fecha_registro = fecha_inicio + timedelta(days=dias_random)
         
-        email = f"cliente{i+1}@{fake.domain_name()}"
+        # EMAIL ESTÁTICO: cliente1@example.com, cliente2@example.com, etc.
+        email = f"cliente{i+1}@example.com"
         
         user, created = User.objects.get_or_create(
             email=email,
@@ -468,12 +470,17 @@ def seed_clientes(cantidad=1000):
             User.objects.filter(id=user.id).update(created_at=fecha_registro)
             user.refresh_from_db()
             clientes.append(user)
+            clientes_info.append({
+                'email': email,
+                'nombre': nombre,
+                'apellido': apellido
+            })
         
         if (i + 1) % 100 == 0:
             print_progress(i + 1, cantidad, f"{i+1} clientes creados")
     
     print(f"{Colors.OK}✅ {len(clientes)} clientes creados (contraseña: Cliente2024!){Colors.END}")
-    return clientes
+    return clientes, clientes_info
 
 def seed_categorias():
     """Crear categorías principales"""
@@ -1005,7 +1012,7 @@ def run():
     usuarios_principales = seed_usuarios_principales()
     stats['usuarios_principales'] = len(usuarios_principales)
     
-    clientes = seed_clientes(1000)
+    clientes, clientes_info = seed_clientes(1000)
     stats['clientes'] = len(clientes)
     
     # 3. Productos - Estructura base
@@ -1098,6 +1105,28 @@ def run():
     
     print(f"\n{Colors.CYAN}⏱️  Tiempo de ejecución: {duracion:.2f} segundos{Colors.END}")
     print(f"{Colors.OK}✅ ¡SEEDING COMPLETADO EXITOSAMENTE!{Colors.END}\n")
+    
+    # ============= CREDENCIALES DE ACCESO =============
+    print_header("🔐 CREDENCIALES DE ACCESO")
+    
+    print(f"\n{Colors.BOLD}👤 ADMIN:{Colors.END}")
+    print(f"   Email:    admin@smartsales365.com")
+    print(f"   Password: Admin2024!")
+    
+    print(f"\n{Colors.BOLD}👨‍💼 EMPLEADOS:{Colors.END}")
+    print(f"   Email:    empleado1@smartsales365.com")
+    print(f"   Password: Empleado2024!")
+    print(f"   Email:    empleado2@smartsales365.com")
+    print(f"   Password: Empleado2024!")
+    
+    print(f"\n{Colors.BOLD}👥 CLIENTES (Primeros 10 ejemplos):{Colors.END}")
+    for i, cliente_info in enumerate(clientes_info[:10], 1):
+        print(f"   {i}. Email: {cliente_info['email']}")
+        print(f"      Nombre: {cliente_info['nombre']} {cliente_info['apellido']}")
+        print(f"      Password: Cliente2024!")
+    
+    print(f"\n{Colors.CYAN}📌 Total de clientes: {len(clientes_info)}{Colors.END}")
+    print(f"{Colors.CYAN}📝 Formato: cliente1@example.com hasta cliente{len(clientes_info)}@example.com{Colors.END}\n")
 
 if __name__ == '__main__':
     try:
