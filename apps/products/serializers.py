@@ -60,15 +60,21 @@ class StockPrendaSerializer(serializers.ModelSerializer):
 class PrendaListSerializer(serializers.ModelSerializer):
     """Serializer ligero para listados"""
     marca_nombre = serializers.CharField(source='marca.nombre', read_only=True)
+    categoria_nombre = serializers.SerializerMethodField()
     imagen_principal = serializers.ReadOnlyField()
     stock_total = serializers.ReadOnlyField()
     tiene_stock = serializers.ReadOnlyField()
     tallas_disponibles_detalle = TallaSerializer(source='tallas_disponibles', many=True, read_only=True)
     
+    def get_categoria_nombre(self, obj):
+        """Retorna el nombre de la primera categoría"""
+        primera_categoria = obj.categorias.first()
+        return primera_categoria.nombre if primera_categoria else None
+    
     class Meta:
         model = Prenda
         fields = [
-            'id', 'nombre', 'precio', 'marca_nombre', 'color', 
+            'id', 'nombre', 'precio', 'marca_nombre', 'categoria_nombre', 'color', 
             'imagen_principal', 'stock_total', 'tiene_stock',
             'activa', 'destacada', 'es_novedad', 'slug', 'created_at',
             'tallas_disponibles_detalle'

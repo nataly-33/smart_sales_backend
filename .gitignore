@@ -29,6 +29,10 @@ staticfiles/
 .env.production
 .env.*.local
 
+# Firebase Credentials (IMPORTANTE: No subir a Git)
+*firebase*.json
+firebase-credentials.json
+
 # Testing
 .coverage
 htmlcov/

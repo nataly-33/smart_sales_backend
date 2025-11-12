@@ -4,7 +4,7 @@ DEBUG = True
 
 AUTH_PASSWORD_VALIDATORS = []
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '10.0.2.2']
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True

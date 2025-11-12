@@ -8,7 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost').split(',')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,10.0.2.2').split(',')
 
 # Apps
 DJANGO_APPS = [
@@ -37,6 +37,7 @@ LOCAL_APPS = [
     'apps.orders',
     'apps.reports',
     'apps.ai',
+    'apps.notifications',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -193,4 +194,9 @@ STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')
 # PayPal Configuration
 PAYPAL_CLIENT_ID = config('PAYPAL_CLIENT_ID', default='')
 PAYPAL_CLIENT_SECRET = config('PAYPAL_CLIENT_SECRET', default='')
-PAYPAL_MODE = config('PAYPAL_MODE', default='sandbox')  
+PAYPAL_MODE = config('PAYPAL_MODE', default='sandbox')
+
+# Firebase Configuration
+FIREBASE_CREDENTIALS_PATH = config('FIREBASE_CREDENTIALS_PATH', default=None)
+if FIREBASE_CREDENTIALS_PATH:
+    FIREBASE_CREDENTIALS_PATH = BASE_DIR / FIREBASE_CREDENTIALS_PATH  

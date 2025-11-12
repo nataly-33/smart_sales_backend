@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-🌱 SUPER SEEDER V2 - Datos Realistas de 3 Años para SmartSales365
+SUPER SEEDER V2 - Datos Realistas de 3 Años para SmartSales365
 
 Genera datos de 2023, 2024 y 2025 con:
 - Estacionalidad realista por categoría
@@ -12,7 +13,7 @@ Genera datos de 2023, 2024 y 2025 con:
 - Precios realistas redondeados
 - Fechas distribuidas coherentemente
 
-⚠️  IMPORTANTE: 2025 solo genera datos hasta el 11 de NOVIEMBRE (fecha actual)
+IMPORTANTE: 2025 solo genera datos hasta el 11 de NOVIEMBRE (fecha actual)
                Esto evita contaminar el modelo de IA con datos del futuro.
 
 Uso:
@@ -21,6 +22,13 @@ Uso:
 
 import os
 import sys
+
+# Configurar codificación UTF-8 para Windows
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 import django
 import random
 from pathlib import Path

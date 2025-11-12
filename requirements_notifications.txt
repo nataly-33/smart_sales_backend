@@ -1,0 +1,3 @@
+# Push Notifications
+firebase-admin==6.2.0
+django-model-utils==4.3.1
