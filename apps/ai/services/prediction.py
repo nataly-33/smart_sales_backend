@@ -121,7 +121,7 @@ class PredictionService:
         Returns:
             list: Predicciones por categoría y mes
         """
-        categorias = ['Vestidos', 'Blusas', 'Jeans', 'Jackets']
+        categorias = ['Blusas', 'Vestidos', 'Jeans', 'Jackets'] 
         ml_model, model, feature_columns = self.training_service.load_active_model()
         predictions = []
         
@@ -240,8 +240,8 @@ class PredictionService:
             'trimestre': (target_date.month - 1) // 3 + 1,
         }
         
-        # One-hot encoding para categorías
-        categorias_disponibles = ['Vestidos', 'Blusas', 'Jeans', 'Jackets', 'Sin categoría']
+        # One-hot encoding para categorías (SAME ORDER as data_preparation.py)
+        categorias_disponibles = ['Blusas', 'Vestidos', 'Jeans', 'Jackets']
         for cat in categorias_disponibles:
             col_name = f'cat_{cat}'
             if col_name in feature_columns:
