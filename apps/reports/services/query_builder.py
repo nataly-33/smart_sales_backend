@@ -52,6 +52,8 @@ class QueryBuilder:
             return cls._build_carts_report(config)
         elif report_type == 'top_productos':
             return cls._build_top_products_report(config)
+        elif report_type == 'top_clientes':
+            return cls._build_top_customers_report(config)
         elif report_type == 'ingresos':
             return cls._build_revenue_report(config)
         else:
@@ -69,6 +71,7 @@ class QueryBuilder:
         if config.get('period'):
             start_date = config['period']['start_date']
             end_date = config['period']['end_date']
+            # Usar __lt para end_date para excluir el día siguiente
             queryset = queryset.filter(
                 created_at__date__gte=start_date,
                 created_at__date__lte=end_date
@@ -82,7 +85,41 @@ class QueryBuilder:
         # Agrupación
         group_by = config.get('group_by', [])
 
-        if 'producto' in group_by:
+        if 'categoria' in group_by:
+            # Agrupar ventas por categoría de productos
+            from apps.products.models import Categoria
+            
+            # Obtener ventas por categoría usando los detalles de pedidos
+            categorias_ventas = Categoria.objects.filter(activa=True).annotate(
+                total_vendido=Sum(
+                    'prendas__detalles_pedido__subtotal',
+                    filter=Q(
+                        prendas__detalles_pedido__pedido__in=queryset,
+                        prendas__detalles_pedido__pedido__isnull=False
+                    )
+                ),
+                cantidad_pedidos=Count(
+                    'prendas__detalles_pedido__pedido',
+                    distinct=True,
+                    filter=Q(prendas__detalles_pedido__pedido__in=queryset)
+                ),
+                cantidad_productos_vendidos=Sum(
+                    'prendas__detalles_pedido__cantidad',
+                    filter=Q(prendas__detalles_pedido__pedido__in=queryset)
+                )
+            ).filter(total_vendido__isnull=False).order_by('-total_vendido')
+            
+            if config.get('limit'):
+                categorias_ventas = categorias_ventas[:config['limit']]
+            
+            data = [{
+                'categoria': cat.nombre,
+                'total_ventas': float(cat.total_vendido or 0),
+                'cantidad_pedidos': cat.cantidad_pedidos or 0,
+                'productos_vendidos': cat.cantidad_productos_vendidos or 0
+            } for cat in categorias_ventas]
+
+        elif 'producto' in group_by:
             # Agrupar por producto (usar DetallePedido)
             detalles_qs = DetallePedido.objects.filter(
                 pedido__in=queryset
@@ -338,7 +375,7 @@ class QueryBuilder:
 
         metadata = {
             'total_records': len(data),
-            'period': config.get('period', {}).get('label', 'Todo el tiempo'),
+            'period': config.get('period', {}).get('label', 'Todo el tiempo') if config.get('period') else 'Todo el tiempo',
         }
 
         return {
@@ -396,29 +433,111 @@ class QueryBuilder:
                 pedido__created_at__date__lte=end_date
             )
 
-        # Agrupar por producto y ordenar
-        productos_vendidos = detalles_qs.values(
-            'prenda__nombre',
-            'prenda__precio'
-        ).annotate(
-            cantidad_vendida=Sum('cantidad'),
-            total_ingresos=Sum(F('cantidad') * F('precio_unitario'))
-        ).order_by('-cantidad_vendida')
+        # Agrupación por categoría si se solicita
+        group_by = config.get('group_by', [])
+        
+        if 'categoria' in group_by:
+            # Agrupar productos vendidos por categoría
+            from apps.products.models import Categoria
+            
+            categorias_ventas = Categoria.objects.filter(activa=True).annotate(
+                cantidad_vendida=Sum(
+                    'prendas__detalles_pedido__cantidad',
+                    filter=Q(prendas__detalles_pedido__pedido__isnull=False)
+                ),
+                total_ingresos=Sum(
+                    F('prendas__detalles_pedido__cantidad') * F('prendas__detalles_pedido__precio_unitario'),
+                    filter=Q(prendas__detalles_pedido__pedido__isnull=False)
+                )
+            ).filter(cantidad_vendida__isnull=False).order_by('-cantidad_vendida')
+            
+            if config.get('limit'):
+                categorias_ventas = categorias_ventas[:config['limit']]
+            
+            data = [{
+                'categoria': cat.nombre,
+                'cantidad_vendida': cat.cantidad_vendida or 0,
+                'total_ingresos': float(cat.total_ingresos or 0)
+            } for cat in categorias_ventas]
+        else:
+            # Agrupar por producto y ordenar
+            productos_vendidos = detalles_qs.values(
+                'prenda__nombre',
+                'prenda__precio'
+            ).annotate(
+                cantidad_vendida=Sum('cantidad'),
+                total_ingresos=Sum(F('cantidad') * F('precio_unitario'))
+            ).order_by('-cantidad_vendida')
 
-        # Aplicar límite (por defecto top 10)
-        limit = config.get('limit', 10)
-        productos_vendidos = productos_vendidos[:limit]
+            # Aplicar límite (por defecto top 10)
+            limit = config.get('limit', 10)
+            productos_vendidos = productos_vendidos[:limit]
 
-        data = [{
-            'producto': item['prenda__nombre'],
-            'precio_unitario': float(item['prenda__precio']),
-            'cantidad_vendida': item['cantidad_vendida'],
-            'total_ingresos': float(item['total_ingresos'])
-        } for item in productos_vendidos]
+            data = [{
+                'producto': item['prenda__nombre'],
+                'precio_unitario': float(item['prenda__precio']),
+                'cantidad_vendida': item['cantidad_vendida'],
+                'total_ingresos': float(item['total_ingresos'])
+            } for item in productos_vendidos]
 
         metadata = {
             'total_records': len(data),
-            'period': config.get('period', {}).get('label', 'Todo el tiempo'),
+            'period': config.get('period', {}).get('label', 'Todo el tiempo') if config.get('period') else 'Todo el tiempo',
+            'limit': config.get('limit'),
+            'grouped_by': config.get('group_by', [])
+        }
+
+        return {
+            'data': data,
+            'metadata': metadata
+        }
+
+    @classmethod
+    def _build_top_customers_report(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Construir reporte de top clientes con más compras"""
+        from apps.accounts.models import User
+
+        queryset = User.objects.filter(rol__nombre='Cliente')
+
+        # Filtro de período (por compras en ese período)
+        period_filter = Q()
+        if config.get('period'):
+            start_date = config['period']['start_date']
+            end_date = config['period']['end_date']
+            period_filter = Q(
+                pedidos__created_at__date__gte=start_date,
+                pedidos__created_at__date__lte=end_date
+            )
+
+        # Anotar con cantidad de pedidos y total gastado
+        if config.get('period'):
+            # Solo contar pedidos en el período especificado
+            queryset = queryset.filter(period_filter).annotate(
+                cantidad_pedidos=Count('pedidos', filter=period_filter, distinct=True),
+                total_gastado=Sum('pedidos__total', filter=period_filter)
+            ).order_by('-total_gastado')
+        else:
+            # Todos los pedidos
+            queryset = queryset.annotate(
+                cantidad_pedidos=Count('pedidos'),
+                total_gastado=Sum('pedidos__total')
+            ).filter(cantidad_pedidos__gt=0).order_by('-total_gastado')
+
+        # Aplicar límite (por defecto top 10)
+        limit = config.get('limit', 10)
+        queryset = queryset[:limit]
+
+        data = [{
+            'cliente': user.nombre_completo,
+            'email': user.email,
+            'telefono': user.telefono or '-',
+            'cantidad_pedidos': user.cantidad_pedidos,
+            'total_gastado': float(user.total_gastado or 0)
+        } for user in queryset]
+
+        metadata = {
+            'total_records': len(data),
+            'period': config.get('period', {}).get('label', 'Todo el tiempo') if config.get('period') else 'Todo el tiempo',
             'limit': limit
         }
 
@@ -463,7 +582,53 @@ class QueryBuilder:
 
         metadata = {
             'total_records': len(data),
-            'period': config.get('period', {}).get('label', 'Todo el tiempo'),
+            'period': config.get('period', {}).get('label', 'Todo el tiempo') if config.get('period') else 'Todo el tiempo',
+            'total_pedidos': total_pedidos,
+            'total_ingresos': total_ingresos
+        }
+
+        return {
+            'data': data,
+            'metadata': metadata
+        }
+
+    @classmethod
+    def _build_revenue_report(cls, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Construir reporte de ingresos por período"""
+        from apps.orders.models import Pedido
+
+        queryset = Pedido.objects.all()
+
+        # Aplicar filtros de período
+        if config.get('period'):
+            start_date = config['period']['start_date']
+            end_date = config['period']['end_date']
+            queryset = queryset.filter(
+                created_at__date__gte=start_date,
+                created_at__date__lte=end_date
+            )
+
+        # Agrupar por día
+        ingresos_por_dia = queryset.extra({
+            'fecha': "DATE(created_at)"
+        }).values('fecha').annotate(
+            cantidad_pedidos=Count('id'),
+            total_ingresos=Sum('total')
+        ).order_by('fecha')
+
+        data = [{
+            'fecha': item['fecha'].strftime('%d/%m/%Y') if hasattr(item['fecha'], 'strftime') else str(item['fecha']),
+            'cantidad_pedidos': item['cantidad_pedidos'],
+            'total_ingresos': float(item['total_ingresos'] or 0)
+        } for item in ingresos_por_dia]
+
+        # Calcular totales
+        total_pedidos = sum(item['cantidad_pedidos'] for item in data)
+        total_ingresos = sum(item['total_ingresos'] for item in data)
+
+        metadata = {
+            'total_records': len(data),
+            'period': config.get('period', {}).get('label', 'Todo el tiempo') if config.get('period') else 'Todo el tiempo',
             'total_pedidos': total_pedidos,
             'total_ingresos': total_ingresos
         }
