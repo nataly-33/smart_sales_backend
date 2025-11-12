@@ -539,17 +539,35 @@ class PromptParser:
 
     @classmethod
     def _extract_grouping(cls, prompt: str) -> list:
-        """Extraer criterios de agrupación"""
+        """Extraer criterios de agrupación - soporta singular y plural"""
         group_by = []
+        
+        # Normalizar prompt
+        prompt_lower = prompt.lower()
 
-        if 'agrupado por producto' in prompt or 'por producto' in prompt:
-            group_by.append('producto')
-        if 'agrupado por categor' in prompt or 'por categor' in prompt:
-            group_by.append('categoria')
-        if 'agrupado por cliente' in prompt or 'por cliente' in prompt:
-            group_by.append('cliente')
-        if 'agrupado por mes' in prompt or 'por mes' in prompt:
-            group_by.append('mes')
+        # Producto/Productos
+        if re.search(r'productos?(?:\s|$|,|y)', prompt_lower):
+            # Verificar que es contexto de agrupación
+            if re.search(r'(?:agrupada?s?|por)\s+(?:\w+\s+)?productos?', prompt_lower):
+                group_by.append('producto')
+        
+        # Categoría/Categorías  
+        if re.search(r'categor[ií]as?(?:\s|$|,|y)', prompt_lower):
+            if re.search(r'(?:agrupada?s?|por)\s+(?:\w+\s+)?categor[ií]as?', prompt_lower):
+                group_by.append('categoria')
+        
+        # Cliente/Clientes
+        if re.search(r'clientes?(?:\s|$|,|y)', prompt_lower):
+            if re.search(r'(?:agrupada?s?|por)\s+(?:\w+\s+)?clientes?', prompt_lower):
+                group_by.append('cliente')
+        
+        # Mes/Meses - evitar confusión con fechas
+        if re.search(r'meses?(?:\s|$|,|y)', prompt_lower):
+            # Buscar en contexto de agrupación, no en fechas
+            if re.search(r'(?:agrupada?s?|por)\s+(?:\w+\s+)?meses?', prompt_lower):
+                # Excluir casos como "desde el mes de"
+                if not re.search(r'(?:desde|del|en el|para el)\s+mes(?:es)?', prompt_lower):
+                    group_by.append('mes')
 
         return group_by
 

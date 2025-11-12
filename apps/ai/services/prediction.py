@@ -111,31 +111,63 @@ class PredictionService:
         
         return predictions
     
-    def predict_by_category(self):
+    def predict_by_category(self, n_months=3):
         """
-        Predice ventas del próximo mes para cada categoría
+        Predice ventas de los próximos N meses para cada categoría
+        
+        Args:
+            n_months (int): Número de meses a predecir
         
         Returns:
-            list: Predicciones por categoría
+            list: Predicciones por categoría y mes
         """
-        categorias = ['Vestidos', 'Blusas', 'Pantalones', 'Faldas']
+        categorias = ['Vestidos', 'Blusas', 'Jeans', 'Jackets']
+        ml_model, model, feature_columns = self.training_service.load_active_model()
         predictions = []
         
-        for categoria in categorias:
-            try:
-                pred = self.predict_next_month(categoria=categoria)
-                predictions.append(pred)
-            except Exception as e:
-                print(f"⚠️ Error prediciendo {categoria}: {str(e)}")
+        for i in range(n_months):
+            # Calcular fecha del mes a predecir
+            target_date = timezone.now() + timedelta(days=30 * (i + 1))
+            periodo = target_date.strftime('%Y-%m')
+            
+            for categoria in categorias:
+                try:
+                    # Preparar features
+                    features = self._prepare_features_for_date(target_date, categoria, feature_columns)
+                    
+                    # Hacer predicción
+                    prediction = model.predict(features)[0]
+                    
+                    # Verificar si ya existe predicción para este período y categoría
+                    # Si existe, actualizar; si no, crear
+                    prediccion, created = PrediccionVentas.objects.update_or_create(
+                        modelo=ml_model,
+                        periodo_predicho=periodo,
+                        categoria=categoria,
+                        defaults={
+                            'ventas_predichas': prediction,
+                            'features_input': features.to_dict('records')[0]
+                        }
+                    )
+                    
+                    predictions.append({
+                        'periodo': periodo,
+                        'ventas_predichas': round(prediction, 2),
+                        'categoria': categoria,
+                        'prediccion_id': str(prediccion.id),
+                        'confianza': self._calculate_confidence(ml_model)
+                    })
+                except Exception as e:
+                    print(f"⚠️ Error prediciendo {categoria} para {periodo}: {str(e)}")
         
         return predictions
     
-    def get_sales_forecast_dashboard(self, months_back=36, months_forward=3):
+    def get_sales_forecast_dashboard(self, months_back=34, months_forward=3):
         """
         Genera datos completos para el dashboard de predicción
         
         Args:
-            months_back (int): Meses históricos a mostrar (default: 36 = 3 años)
+            months_back (int): Meses históricos a mostrar (default: 34 para evitar Nov-Dic 2025)
             months_forward (int): Meses futuros a predecir (default: 3 meses)
             
         Returns:
@@ -144,11 +176,25 @@ class PredictionService:
         # 1. Datos históricos
         historical_data = self._get_historical_data_aggregated(months_back)
         
-        # 2. Predicciones futuras
-        future_predictions = self.predict_next_n_months(n_months=months_forward)
+        # 2. Predicciones por categoría (para TODOS los meses solicitados)
+        category_predictions = self.predict_by_category(n_months=months_forward)
         
-        # 3. Predicciones por categoría
-        category_predictions = self.predict_by_category()
+        # 3. Calcular predicciones totales por mes sumando las categorías
+        future_predictions = []
+        predictions_by_month = {}
+        
+        for pred in category_predictions:
+            periodo = pred['periodo']
+            if periodo not in predictions_by_month:
+                predictions_by_month[periodo] = {
+                    'periodo': periodo,
+                    'ventas_predichas': 0,
+                    'mes': int(periodo.split('-')[1]),
+                    'año': int(periodo.split('-')[0])
+                }
+            predictions_by_month[periodo]['ventas_predichas'] += pred['ventas_predichas']
+        
+        future_predictions = list(predictions_by_month.values())
         
         # 4. Top productos
         top_products = self.data_service.get_top_selling_products(limit=10)
@@ -195,7 +241,7 @@ class PredictionService:
         }
         
         # One-hot encoding para categorías
-        categorias_disponibles = ['Vestidos', 'Blusas', 'Pantalones', 'Faldas', 'Sin categoría']
+        categorias_disponibles = ['Vestidos', 'Blusas', 'Jeans', 'Jackets', 'Sin categoría']
         for cat in categorias_disponibles:
             col_name = f'cat_{cat}'
             if col_name in feature_columns:
